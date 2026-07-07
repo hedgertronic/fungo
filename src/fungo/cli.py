@@ -1,16 +1,17 @@
 """``fungo`` command-line interface.
 
-A single ``fungo`` entry point with four subcommands — ``lookup``,
-``search``, ``leaderboard``, and ``mlb`` — that parse arguments and delegate
-straight to the library, then render the result as CSV or JSON. The CLI holds
-no business logic: each subcommand maps flags onto an existing public function
-and prints what comes back.
+A single ``fungo`` entry point with six subcommands — ``lookup``, ``search``,
+``leaderboard``, ``mlb``, ``fangraphs``, and ``bbref`` — that parse arguments
+and delegate straight to the library, then render the result as CSV or JSON.
+The CLI holds no business logic: each subcommand maps flags onto an existing
+public function and prints what comes back.
 
 Expected library errors (the ``FungoError`` family — ``ValidationError``,
-``SavantError``, ``RequestError``, ``MLBStatsError``) are caught at the
-``main`` boundary and reported as a one-line ``error:`` message on stderr with
-exit code 1; argparse handles usage errors. Unexpected exceptions (i.e. bugs)
-are left to propagate so they surface a full traceback.
+``SavantError``, ``RequestError``, ``MLBStatsError``, ``FangraphsError``,
+``BBRefError``) are caught at the ``main`` boundary and reported as a one-line
+``error:`` message on stderr with exit code 1; argparse handles usage errors.
+Unexpected exceptions (i.e. bugs) are left to propagate so they surface a full
+traceback.
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ import json
 import sys
 from typing import Any
 
-from fungo import mlb
+from fungo import bbref, fangraphs, mlb
 from fungo.exceptions import FungoError
 from fungo.lookup import lookup
 from fungo.statcast.leaderboards import get_leaderboard, list_leaderboards
@@ -179,17 +180,43 @@ def _run_leaderboard(args: argparse.Namespace, extras: list[str]) -> Any:
     return get_leaderboard(args.slug, year=_parse_seasons(args.season), **params)
 
 
-def _run_mlb(args: argparse.Namespace, extras: list[str]) -> Any:
+def _run_module_function(
+    module: Any, module_name: str, args: argparse.Namespace, extras: list[str]
+) -> Any:
+    """Shared handler for the function-passthrough subcommands (mlb,
+    fangraphs, bbref): dispatch ``FUNCTION --key=value ...`` onto a public
+    function listed in the module's ``__all__``."""
     if args.list:
-        return [{"function": name} for name in sorted(mlb.__all__)]
+        return [
+            {"function": name}
+            for name in sorted(module.__all__)
+            if callable(getattr(module, name))
+        ]
     if not args.function:
-        raise SystemExit("fungo mlb: a function name is required (or use --list)")
-    if args.function not in mlb.__all__:
         raise SystemExit(
-            f"fungo mlb: unknown function {args.function!r}; use --list for options"
+            f"fungo {module_name}: a function name is required (or use --list)"
+        )
+    if args.function not in module.__all__ or not callable(
+        getattr(module, args.function)
+    ):
+        raise SystemExit(
+            f"fungo {module_name}: unknown function {args.function!r}; "
+            "use --list for options"
         )
     kwargs = _parse_extras(extras, pipe_join=False)
-    return getattr(mlb, args.function)(**kwargs)
+    return getattr(module, args.function)(**kwargs)
+
+
+def _run_mlb(args: argparse.Namespace, extras: list[str]) -> Any:
+    return _run_module_function(mlb, "mlb", args, extras)
+
+
+def _run_fangraphs(args: argparse.Namespace, extras: list[str]) -> Any:
+    return _run_module_function(fangraphs, "fangraphs", args, extras)
+
+
+def _run_bbref(args: argparse.Namespace, extras: list[str]) -> Any:
+    return _run_module_function(bbref, "bbref", args, extras)
 
 
 #####################################################################
@@ -259,6 +286,22 @@ def _build_parser() -> argparse.ArgumentParser:
     p_mlb.add_argument("function", nargs="?", help="An mlb function name.")
     p_mlb.add_argument("--list", action="store_true", help="List available functions.")
 
+    p_fg = sub.add_parser(
+        "fangraphs",
+        parents=[common],
+        help="FanGraphs (leaderboards, player stats, RosterResource, Guts!).",
+    )
+    p_fg.add_argument("function", nargs="?", help="A fangraphs function name.")
+    p_fg.add_argument("--list", action="store_true", help="List available functions.")
+
+    p_br = sub.add_parser(
+        "bbref",
+        parents=[common],
+        help="Baseball-Reference (rate-limited single-page fetchers).",
+    )
+    p_br.add_argument("function", nargs="?", help="A bbref function name.")
+    p_br.add_argument("--list", action="store_true", help="List available functions.")
+
     return parser
 
 
@@ -267,6 +310,8 @@ _HANDLERS = {
     "search": _run_search,
     "leaderboard": _run_leaderboard,
     "mlb": _run_mlb,
+    "fangraphs": _run_fangraphs,
+    "bbref": _run_bbref,
 }
 
 
@@ -287,7 +332,9 @@ def main(argv: list[str] | None = None) -> int:
     """
     parser = _build_parser()
     args, extras = parser.parse_known_args(argv)
-    fmt = args.format or ("json" if args.command == "mlb" else "csv")
+    fmt = args.format or (
+        "json" if args.command in ("mlb", "fangraphs", "bbref") else "csv"
+    )
 
     try:
         result = _HANDLERS[args.command](args, extras)

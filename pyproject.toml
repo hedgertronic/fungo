@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "fungo"
 version = "1.0.0"
-description = "Python tools for baseball data from Statcast and the MLB Stats API."
+description = "Python tools for baseball data from Statcast, the MLB Stats API, FanGraphs, and Baseball-Reference."
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [{ name = "Josh Hejka" }]
@@ -25,7 +25,10 @@ classifiers = [
     "Typing :: Typed",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-dependencies = []
+# beautifulsoup4: Baseball-Reference table parsing (comment-deferred tables).
+# curl_cffi: browser TLS impersonation — B-R Cloudflare-fingerprint-blocks
+# generic Python clients (as it did for months in 2025).
+dependencies = ["beautifulsoup4", "curl_cffi"]
 
 [project.urls]
 Homepage = "https://github.com/hedgertronic/fungo"
@@ -35,24 +38,20 @@ Repository = "https://github.com/hedgertronic/fungo"
 fungo = "fungo.cli:main"
 
 [project.optional-dependencies]
-polars = ["polars"]
-pandas = ["pandas"]
+# No DataFrame extra: fungo returns list[dict]/dict — wrap results in whatever
+# frame library you already use (pl.DataFrame(rows) / pd.DataFrame(rows)).
 progress = ["rich"]
-all = ["polars", "pandas", "rich"]
+all = ["rich"]
 
 [dependency-groups]
-# Type-checking against the optional backends needs them installed; polars and
-# rich ship inline types (PEP 561), pandas needs the separate pandas-stubs.
 dev = [
     "pytest",
     "pytest-cov",
     "ruff",
     "mypy",
-    "polars",
-    "pandas",
-    "pandas-stubs",
     "rich",
     "pre-commit",
+    "types-beautifulsoup4",
 ]
 
 [tool.hatch.build.targets.wheel]
