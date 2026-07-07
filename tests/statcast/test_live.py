@@ -1,6 +1,6 @@
 """Live network smoke test (deselected by default; run with `-m live`).
 
-Proves the year_format fix against real Baseball Savant: the bat-tracking board
+Checks ``year_format`` against real Baseball Savant: the bat-tracking board
 ignores `year=` and needs seasonStart/seasonEnd. A passing run returns non-empty
 2024 rows.
 """
@@ -16,7 +16,7 @@ from fungo.statcast import leaderboards as lb
 def test_bat_tracking_2024_returns_rows():
     rows = lb.get_bat_tracking(2024, min_swings="q")
     assert len(rows) > 0
-    # camelCase season param fix landed real data, not an empty/current-season page
+    # camelCase season params return real data, not an empty/current-season page.
     assert "avg_bat_speed" in rows[0] or "swing_length" in rows[0]
 
 

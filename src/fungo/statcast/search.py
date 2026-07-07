@@ -18,8 +18,8 @@ Gotchas folded in from the Statcast skill references:
 - **All CSV values are strings.** Empty cells are ``""``. Pre-2015 rows are Pitch
   F/X, not Statcast (spin/EV/LA unreliable or missing).
 
-New pitch-by-pitch bat-tracking / miss-distance columns now present in the
-``type=details`` search output (verified live; absent from older docs):
+Pitch-by-pitch bat-tracking / miss-distance columns present in the
+``type=details`` search output (verified live 2026-07; absent from older docs):
 
     bat_speed                                   bat head speed, mph
     swing_length                                swing path length, feet

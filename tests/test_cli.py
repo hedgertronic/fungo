@@ -264,3 +264,54 @@ def test_output_to_file(monkeypatch, tmp_path):
     text = target.read_text(encoding="utf-8")
     assert text.splitlines()[0] == "player_id,name,velo"
     assert "1,A,95" in text
+
+
+#####################################################################
+# fangraphs / bbref subcommands
+#####################################################################
+
+
+def test_fangraphs_list(capsys):
+    assert cli.main(["fangraphs", "--list"]) == 0
+    out = capsys.readouterr().out
+    assert "get_leaders" in out
+    # Non-callable __all__ entries (STAT_GROUPS, SPLIT_MONTHS) are excluded.
+    assert "STAT_GROUPS" not in out
+
+
+def test_bbref_list(capsys):
+    assert cli.main(["bbref", "--list"]) == 0
+    out = capsys.readouterr().out
+    assert "get_player" in out
+    assert "get_war_daily" in out
+
+
+def test_fangraphs_dispatch_and_json_default(monkeypatch, capsys):
+    def fake(**kwargs: Any) -> list[dict]:
+        assert kwargs == {"stats": "pit", "start_season": "2025"}
+        return ROWS
+
+    monkeypatch.setattr(cli.fangraphs, "get_leaders", fake)
+    argv = ["fangraphs", "get_leaders", "--stats=pit", "--start-season=2025"]
+    assert cli.main(argv) == 0
+    assert json.loads(capsys.readouterr().out) == ROWS
+
+
+def test_fangraphs_unknown_function_exits():
+    with pytest.raises(SystemExit, match="unknown function"):
+        cli.main(["fangraphs", "get_nonsense"])
+
+
+def test_fangraphs_non_callable_all_entry_exits():
+    with pytest.raises(SystemExit, match="unknown function"):
+        cli.main(["fangraphs", "STAT_GROUPS"])
+
+
+def test_bbref_dispatch(monkeypatch, capsys):
+    def fake(**kwargs: Any) -> list[dict]:
+        assert kwargs == {"bbref_id": "troutmi01"}
+        return ROWS
+
+    monkeypatch.setattr(cli.bbref, "get_player", fake)
+    assert cli.main(["bbref", "get_player", "--bbref-id=troutmi01"]) == 0
+    assert json.loads(capsys.readouterr().out) == ROWS

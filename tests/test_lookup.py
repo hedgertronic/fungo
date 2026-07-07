@@ -178,14 +178,14 @@ def test_lookup_cache_hit_does_not_redownload(counting_register):
     after_first = counting_register["count"]
     assert after_first == len(lookup_mod.CHADWICK_SHARDS)
 
-    # Second lookup is served from the in-memory cache — no new downloads.
+    # Second lookup is served from the in-memory cache without network IO.
     lookup_mod.lookup(name="trout")
     assert counting_register["count"] == after_first
 
 
 def test_lookup_loads_disk_cache_without_redownload(counting_register):
     # Simulates a fresh process: in-memory cache is cold but the on-disk cache
-    # persists, so _load reads from disk instead of re-downloading.
+    # persists, so _load reads from disk without network IO.
     lookup_mod.lookup(name="trout")
     after_first = counting_register["count"]
 

@@ -28,18 +28,24 @@ def test_package_version_matches_pyproject():
 
 def test_all_extra_is_runtime_only():
     project = _pyproject()
+    # bbref needs bs4 (comment-deferred tables) and curl_cffi (Cloudflare TLS
+    # impersonation); nothing else may creep into runtime deps.
+    assert set(project["project"]["dependencies"]) == {
+        "beautifulsoup4",
+        "curl_cffi",
+    }
     extras = project["project"]["optional-dependencies"]
-    assert extras["all"] == ["polars", "pandas", "rich"]
+    # No DataFrame extras: fungo returns list[dict]/dict and users wrap it in
+    # whatever frame library they already have.
+    assert extras["all"] == ["rich"]
     assert "dev" not in extras
-    assert not {"pytest", "pytest-cov", "ruff", "mypy", "pandas-stubs"} & set(
-        extras["all"]
-    )
+    assert not {"polars", "pandas"} & set(extras["all"])
+    assert not {"pytest", "pytest-cov", "ruff", "mypy"} & set(extras["all"])
     assert {
         "pytest",
         "pytest-cov",
         "ruff",
         "mypy",
-        "pandas-stubs",
         "pre-commit",
     } <= set(project["dependency-groups"]["dev"])
 
