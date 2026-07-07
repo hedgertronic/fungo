@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fungo"
-version = "1.0.0"
+version = "2.0.0"
 description = "Python tools for baseball data from Statcast, the MLB Stats API, FanGraphs, and Baseball-Reference."
 readme = "README.md"
 requires-python = ">=3.12"
