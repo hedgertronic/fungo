@@ -83,6 +83,74 @@ def test_fg_json_other_errors_propagate(monkeypatch):
         api.fg_json("/api/x")
 
 
+def test_fg_json_post_403_raises_fangraphs_error(monkeypatch):
+    def fake(url: str, params: Any = None, **kw: Any) -> Any:
+        raise RequestError(f"HTTP 403 for {url}: Forbidden")
+
+    monkeypatch.setattr(http, "request_json", fake)
+    with pytest.raises(FangraphsError, match="okhttp"):
+        api.fg_json_post("/api/x", {"key": "val"})
+
+
+def test_fg_json_post_other_errors_propagate(monkeypatch):
+    def fake(url: str, params: Any = None, **kw: Any) -> Any:
+        raise RequestError(f"HTTP 500 for {url}")
+
+    monkeypatch.setattr(http, "request_json", fake)
+    with pytest.raises(RequestError):
+        api.fg_json_post("/api/x", {"key": "val"})
+
+
+def test_fg_html_success_decodes_response(monkeypatch):
+    _capture_bytes(monkeypatch, b"<html>ok</html>")
+    assert api.fg_html("/guts.aspx") == "<html>ok</html>"
+
+
+def test_fg_html_403_raises_fangraphs_error(monkeypatch):
+    def fake(url: str, params: Any = None, **kw: Any) -> bytes:
+        raise RequestError(f"HTTP 403 for {url}: Forbidden")
+
+    monkeypatch.setattr(http, "request_bytes", fake)
+    with pytest.raises(FangraphsError, match="okhttp"):
+        api.fg_html("/guts.aspx")
+
+
+def test_fg_html_other_errors_propagate(monkeypatch):
+    def fake(url: str, params: Any = None, **kw: Any) -> bytes:
+        raise RequestError(f"HTTP 500 for {url}")
+
+    monkeypatch.setattr(http, "request_bytes", fake)
+    with pytest.raises(RequestError):
+        api.fg_html("/guts.aspx")
+
+
+def test_fg_page_data_403_raises_fangraphs_error(monkeypatch):
+    def fake(url: str, params: Any = None, **kw: Any) -> bytes:
+        raise RequestError(f"HTTP 403 for {url}: Forbidden")
+
+    monkeypatch.setattr(http, "request_bytes", fake)
+    with pytest.raises(FangraphsError, match="okhttp"):
+        api.fg_page_data("/some/page")
+
+
+def test_fg_page_data_other_errors_propagate(monkeypatch):
+    def fake(url: str, params: Any = None, **kw: Any) -> bytes:
+        raise RequestError(f"HTTP 500 for {url}")
+
+    monkeypatch.setattr(http, "request_bytes", fake)
+    with pytest.raises(RequestError):
+        api.fg_page_data("/some/page")
+
+
+def test_fg_page_data_invalid_json_raises(monkeypatch):
+    _capture_bytes(
+        monkeypatch,
+        b'<script id="__NEXT_DATA__" type="application/json">not-valid-json</script>',
+    )
+    with pytest.raises(FangraphsError, match="Unparseable"):
+        api.fg_page_data("/some/page")
+
+
 def test_fg_page_data_extracts_next_data(monkeypatch):
     blob = {"props": {"pageProps": {"x": 1}}}
     html = (
@@ -153,6 +221,29 @@ def test_get_splits_unknown_split():
         leaders.get_splits("pit", 2024, "vs_lhP")
 
 
+def test_fetch_leaders_unknown_league():
+    with pytest.raises(ValidationError, match="major"):
+        leaders.fetch_leaders("bat", 2024, league="aaa")
+
+
+def test_fetch_leaders_extra_params_merged(monkeypatch):
+    log = _capture_json(monkeypatch, LEADERS_PAYLOAD)
+    leaders.fetch_leaders("bat", 2024, extra_params={"custom_key": "x"})
+    assert log["params"]["custom_key"] == "x"
+
+
+def test_fetch_leaders_bad_payload_raises(monkeypatch):
+    _capture_json(monkeypatch, [1, 2, 3])  # list, not the expected dict
+    with pytest.raises(FangraphsError, match="Unexpected leaders payload"):
+        leaders.fetch_leaders("bat", 2024)
+
+
+def test_get_leaders_data_not_list_raises(monkeypatch):
+    _capture_json(monkeypatch, {"data": {"key": "val"}, "totalCount": 0})
+    with pytest.raises(FangraphsError, match="Expected a list"):
+        leaders.get_leaders("bat", 2024)
+
+
 #####################################################################
 # players
 #####################################################################
@@ -170,6 +261,24 @@ def test_get_game_log_omits_season_when_none(monkeypatch):
     players.get_game_log("sa917940", log_type=-1)
     assert "season" not in log["params"]
     assert log["params"]["type"] == -1
+
+
+def test_get_player_stats_bad_payload_raises(monkeypatch):
+    _capture_json(monkeypatch, [1, 2])  # list, not the expected dict
+    with pytest.raises(FangraphsError, match="Unexpected player stats payload"):
+        players.get_player_stats(15640)
+
+
+def test_get_game_log_with_season_includes_season(monkeypatch):
+    log = _capture_json(monkeypatch, {"mlb": []})
+    players.get_game_log(15640, 2024)
+    assert log["params"]["season"] == 2024
+
+
+def test_get_game_log_bad_payload_raises(monkeypatch):
+    _capture_json(monkeypatch, [1, 2])  # list, not the expected dict
+    with pytest.raises(FangraphsError, match="Unexpected game log payload"):
+        players.get_game_log(15640)
 
 
 #####################################################################
@@ -208,6 +317,12 @@ def test_park_factors_params(monkeypatch):
     assert log["params"] == {"type": "pf", "teamid": 0, "season": 2025}
 
 
+def test_park_factors_by_handedness_params(monkeypatch):
+    log = _capture_bytes(monkeypatch, GUTS_HTML.encode())
+    guts.get_park_factors_by_handedness(2025)
+    assert log["params"] == {"type": "pfh", "teamid": 0, "season": 2025}
+
+
 #####################################################################
 # roster resource: dehydrated-state walking
 #####################################################################
@@ -239,6 +354,26 @@ def test_get_roster_resource_no_queries_raises(monkeypatch):
         b'<script id="__NEXT_DATA__" type="application/json">{"props":{}}</script>',
     )
     with pytest.raises(FangraphsError, match="dehydrated"):
+        roster_resource.get_roster_resource("payroll")
+
+
+def test_get_roster_resource_non_dict_data_raises(monkeypatch):
+    blob = {
+        "props": {
+            "pageProps": {
+                "dehydratedState": {"queries": [{"state": {"data": [1, 2, 3]}}]}
+            }
+        }
+    }
+    _capture_bytes(
+        monkeypatch,
+        (
+            '<script id="__NEXT_DATA__" type="application/json">'
+            + json.dumps(blob)
+            + "</script>"
+        ).encode(),
+    )
+    with pytest.raises(FangraphsError, match="Unexpected RosterResource"):
         roster_resource.get_roster_resource("payroll")
 
 
@@ -366,6 +501,51 @@ def test_split_leaders_pitch_splits_raw_int_passthrough(monkeypatch):
     assert log["body"]["strSplitArrPitch"] == [6, 100]
 
 
+def test_split_leaders_bad_position():
+    from fungo.fangraphs import splits
+
+    with pytest.raises(ValidationError, match="B"):
+        splits.get_split_leaders("X", 2025)
+
+
+def test_split_leaders_bad_stat_group():
+    from fungo.fangraphs import splits
+
+    with pytest.raises(ValidationError, match="advanced"):
+        splits.get_split_leaders("B", 2025, stat_group="invalid_group")
+
+
+def test_split_leaders_bad_stat_type():
+    from fungo.fangraphs import splits
+
+    with pytest.raises(ValidationError, match="player"):
+        splits.get_split_leaders("B", 2025, stat_type="invalid_type")
+
+
+def test_split_leaders_extra_body_merged(monkeypatch):
+    from fungo.fangraphs import splits
+
+    log = _capture_post(monkeypatch, SPLITS_PAYLOAD)
+    splits.get_split_leaders("B", 2025, extra_body={"custom_field": "cv"})
+    assert log["body"]["custom_field"] == "cv"
+
+
+def test_split_leaders_bad_payload_raises(monkeypatch):
+    from fungo.fangraphs import splits
+
+    _capture_post(monkeypatch, [1, 2, 3])  # list, not the expected dict
+    with pytest.raises(FangraphsError, match="Unexpected splits payload"):
+        splits.get_split_leaders("B", 2025)
+
+
+def test_split_leaders_data_not_list_raises(monkeypatch):
+    from fungo.fangraphs import splits
+
+    _capture_post(monkeypatch, {"data": {"player": "X"}, "k": [], "v": []})
+    with pytest.raises(FangraphsError, match="Expected a list"):
+        splits.get_split_leaders("B", 2025)
+
+
 def test_split_code_table_length():
     from fungo.fangraphs.splits import SPLIT_CODE_TABLE
 
@@ -428,3 +608,33 @@ def test_get_projections_wrapped_payload_raises(monkeypatch):
     _capture_json(monkeypatch, {"data": []})  # dict, not the expected bare list
     with pytest.raises(FangraphsError, match="Unexpected projections"):
         projections.get_projections()
+
+
+def test_get_projections_bad_stats_group():
+    from fungo.fangraphs import projections
+
+    with pytest.raises(ValidationError, match="bat"):
+        projections.get_projections("steamer", "batting")
+
+
+def test_get_projections_extra_params_merged(monkeypatch):
+    from fungo.fangraphs import projections
+
+    log = _capture_json(monkeypatch, [])
+    projections.get_projections("steamer", extra_params={"foo": "bar"})
+    assert log["params"]["foo"] == "bar"
+
+
+#####################################################################
+# prospects: THE BOARD
+#####################################################################
+
+
+def test_get_prospect_board_params(monkeypatch):
+    from fungo.fangraphs import prospects
+
+    log = _capture_json(monkeypatch, {"data": []})
+    prospects.get_prospect_board(2025)
+    assert "/api/prospects/board/data" in log["url"]
+    assert log["params"]["draft"] == "2025prospect"
+    assert log["params"]["season"] == 2025

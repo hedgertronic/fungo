@@ -124,6 +124,41 @@ def test_bbref_bytes_builds_url(monkeypatch):
 
 
 #####################################################################
+# session: _fetch (curl_cffi transport seam)
+#####################################################################
+
+
+class _FakeResp:
+    """Minimal curl_cffi response stand-in."""
+
+    def __init__(self, status_code: int, content: bytes) -> None:
+        self.status_code = status_code
+        self.content = content
+
+
+def test_fetch_success_returns_bytes(monkeypatch):
+    monkeypatch.setattr(
+        session.curl_requests,
+        "get",
+        lambda *a, **kw: _FakeResp(200, b"page bytes"),
+    )
+    result = session._fetch(f"{session.BASE_URL}/x", None)
+    assert result == b"page bytes"
+
+
+def test_fetch_4xx_raises_request_error(monkeypatch):
+    from fungo.exceptions import RequestError
+
+    monkeypatch.setattr(
+        session.curl_requests,
+        "get",
+        lambda *a, **kw: _FakeResp(404, b""),
+    )
+    with pytest.raises(RequestError, match="HTTP 404"):
+        session._fetch(f"{session.BASE_URL}/x", None)
+
+
+#####################################################################
 # tables: comment-aware extraction, data-stat addressing
 #####################################################################
 
@@ -187,6 +222,19 @@ def test_get_war_daily_unknown_kind():
         war.get_war_daily("pitching")
 
 
+def test_get_war_daily_batting_fetches_bat_file(monkeypatch):
+    log = _capture_fetch(monkeypatch, b"name_common,WAR\nMike Trout,10.5\n")
+    rows = war.get_war_daily_batting()
+    assert log["url"].endswith("/data/war_daily_bat.txt")
+    assert rows[0]["WAR"] == "10.5"
+
+
+def test_get_war_daily_pitching_fetches_pitch_file(monkeypatch):
+    log = _capture_fetch(monkeypatch, b"name_common,WAR\nMax Scherzer,5.2\n")
+    war.get_war_daily_pitching()
+    assert log["url"].endswith("/data/war_daily_pitch.txt")
+
+
 #####################################################################
 # players / teams: path building
 #####################################################################
@@ -212,10 +260,22 @@ def test_get_splits_defaults_to_career(monkeypatch):
     assert log["params"] == {"id": "troutmi01", "year": "Career", "t": "b"}
 
 
+def test_get_player_table_extracts_single_table(monkeypatch):
+    _capture_fetch(monkeypatch, PAGE_HTML.encode())
+    rows = players.get_player_table("troutmi01", "players_standard_batting")
+    assert rows[0]["b_war"] == "0.5"
+
+
 def test_get_team_schedule_uppercases(monkeypatch):
     log = _capture_fetch(monkeypatch, PAGE_HTML.encode())
     teams.get_team_schedule("nyy", 2024)
     assert log["url"].endswith("/teams/NYY/2024-schedule-scores.shtml")
+
+
+def test_get_team_season_url(monkeypatch):
+    log = _capture_fetch(monkeypatch, PAGE_HTML.encode())
+    teams.get_team_season("nyy", 2023)
+    assert log["url"].endswith("/teams/NYY/2023.shtml")
 
 
 #####################################################################
@@ -237,6 +297,27 @@ def test_extract_all_tables_suffixes_duplicate_ids():
     # AL table first in document order, NL suffixed — neither dropped.
     assert out["standings_E"][0]["team_ID"] == "NYY"
     assert out["standings_E_2"][0]["team_ID"] == "ATL"
+
+
+TRIPLE_DUP_HTML = """
+<table id="foo"><tbody>
+<tr><th data-stat="val">A</th></tr>
+</tbody></table>
+<table id="foo"><tbody>
+<tr><th data-stat="val">B</th></tr>
+</tbody></table>
+<table id="foo"><tbody>
+<tr><th data-stat="val">C</th></tr>
+</tbody></table>
+"""
+
+
+def test_extract_all_tables_suffixes_triple_duplicate():
+    """Third table with same id increments counter past _2 to _3."""
+    out = tables.extract_all_tables(TRIPLE_DUP_HTML)
+    assert out["foo"][0]["val"] == "A"
+    assert out["foo_2"][0]["val"] == "B"
+    assert out["foo_3"][0]["val"] == "C"
 
 
 #####################################################################
@@ -479,3 +560,47 @@ def test_errors_not_cached(monkeypatch, _cache_dir):
     result = session.bbref_bytes("/err")
     assert result == b"recovered"
     assert len(calls) == 2
+
+
+def test_enable_cache_default_dir_uses_xdg_cache_home(monkeypatch, tmp_path):
+    """enable_cache() with no path resolves via XDG_CACHE_HOME."""
+    from fungo.bbref import cache
+
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    try:
+        resolved = cache.enable_cache()
+        assert resolved == tmp_path / "fungo" / "bbref_cache"
+        assert resolved.is_dir()
+    finally:
+        cache.disable_cache()
+        # Restore globals so later tests start clean.
+        cache._CACHE_DIR = None
+        cache._CACHE_TTL = None
+
+
+def test_clear_cache_nonexistent_dir_returns_zero(monkeypatch, tmp_path):
+    """clear_cache() when the directory does not exist returns 0."""
+    from fungo.bbref import cache
+
+    nonexistent = tmp_path / "not_created"
+    monkeypatch.setattr(cache, "_CACHE_DIR", nonexistent)
+    assert cache.clear_cache() == 0
+
+
+def test_cache_get_oserror_returns_none(tmp_path):
+    """cache_get falls back to None when read_bytes raises OSError."""
+    from fungo.bbref import cache
+
+    p = tmp_path / "bbref_oserr"
+    cache.enable_cache(path=p)
+    try:
+        url = f"{session.BASE_URL}/oserr_test"
+        key = cache._cache_key(url, None)
+        # Create the entry path as a directory so read_bytes() raises IsADirectoryError.
+        (p / key).mkdir()
+        result = cache.cache_get(url, None)
+        assert result is None
+    finally:
+        cache.disable_cache()
+        cache._CACHE_DIR = None
+        cache._CACHE_TTL = None
