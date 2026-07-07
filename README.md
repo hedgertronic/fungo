@@ -1,8 +1,8 @@
 # Fungo for Python <!-- omit in toc -->
 
-Python tools for baseball data from [Statcast](https://baseballsavant.mlb.com) and the [MLB Stats API](https://statsapi.mlb.com).
+Python tools for baseball data from [Statcast](https://baseballsavant.mlb.com), the [MLB Stats API](https://statsapi.mlb.com), [FanGraphs](https://www.fangraphs.com), and [Baseball-Reference](https://www.baseball-reference.com).
 
-Fungo is a small data-access library for researchers, analysts, and developers who want raw baseball data without committing to a DataFrame stack. The core package is stdlib-only. Statcast CSV endpoints return `list[dict]` with string values, MLB Stats API endpoints return raw JSON `dict` payloads, and optional extras add DataFrame conversion or progress bars when you want them.
+Fungo is a small data-access library for researchers, analysts, and developers who want raw baseball data without committing to a DataFrame stack. It carries exactly two runtime dependencies (`beautifulsoup4` and `curl_cffi`, both for Baseball-Reference); everything else is stdlib. CSV endpoints return `list[dict]` with string values, JSON endpoints return raw payloads exactly as the source produced them, and results drop straight into whatever DataFrame library you already use (`pl.DataFrame(rows)` / `pd.DataFrame(rows)`).
 
 ## Contents <!-- omit in toc -->
 
@@ -23,6 +23,21 @@ Fungo is a small data-access library for researchers, analysts, and developers w
   - [Stats](#stats)
   - [League And Baseball Metadata](#league-and-baseball-metadata)
   - [Miscellaneous Endpoints](#miscellaneous-endpoints)
+- [FanGraphs](#fangraphs)
+  - [Leaderboards](#leaderboards-1)
+  - [Splits Leaderboards](#splits-leaderboards)
+  - [Projections](#projections)
+  - [Player Stats And Game Logs](#player-stats-and-game-logs)
+  - [RosterResource](#rosterresource)
+  - [Guts And Park Factors](#guts-and-park-factors)
+  - [THE BOARD (Prospects)](#the-board-prospects)
+  - [Access Notes](#access-notes)
+- [Baseball-Reference](#baseball-reference)
+  - [WAR Daily Files](#war-daily-files)
+  - [Player Pages, Game Logs, And Splits](#player-pages-game-logs-and-splits)
+  - [Standings, Draft, Box Scores, And The Minor-League Register](#standings-draft-box-scores-and-the-minor-league-register)
+  - [Rate Limiting And Etiquette](#rate-limiting-and-etiquette)
+  - [Response Caching](#response-caching)
 - [Player ID Lookup](#player-id-lookup)
 - [DataFrames](#dataframes)
 - [Command Line](#command-line)
@@ -41,14 +56,13 @@ Or with [`uv`](https://docs.astral.sh/uv/):
 uv add fungo
 ```
 
-Install optional extras when you need DataFrames or progress bars:
+Install optional extras when you need them:
 
 ```bash
-uv add "fungo[polars]"     # to_frame(rows, backend="polars")
-uv add "fungo[pandas]"      # to_frame(rows, backend="pandas")
 uv add "fungo[progress]"    # rich progress bars on long pulls
-uv add "fungo[all]"         # all runtime extras
 ```
+
+There is no DataFrame extra — fungo returns `list[dict]` / `dict`, which `polars` and `pandas` both accept directly.
 
 For local development:
 
@@ -77,10 +91,9 @@ schedule = mlb.get_schedule(date="2024-07-16")
 
 The library returns raw data by design:
 
-- Statcast CSV endpoints return `list[dict]`; every value is a string, with `""` for empty cells.
-- HTML-backed Statcast endpoints return parsed JSON from Baseball Savant pages.
-- MLB Stats API endpoints return the raw JSON `dict`.
-- DataFrame conversion is explicit through `to_frame(...)`.
+- CSV endpoints (Statcast search/leaderboards, Baseball-Reference tables and WAR files) return `list[dict]`; every value is a string, with `""` for empty cells.
+- JSON endpoints (MLB Stats API, FanGraphs) return the raw payload exactly as the source produced it — FanGraphs values arrive as native JSON numbers.
+- Wrap any tabular result in your DataFrame library of choice: `pl.DataFrame(rows)` or `pd.DataFrame(rows)`.
 
 ## Statcast
 
@@ -320,6 +333,180 @@ transactions = mlb.get_transactions(start_date="2024-07-01", end_date="2024-07-3
 venues = mlb.get_venues()
 ```
 
+## FanGraphs
+
+The `fungo.fangraphs` namespace wraps FanGraphs' JSON API — leaderboards, player stats and game logs, RosterResource depth charts, Guts! constants, and THE BOARD. Values arrive as native JSON numbers, and rows carry both `playerid` (FanGraphs) and `xMLBAMID` (MLBAM), so results join directly to Statcast data.
+
+### Leaderboards
+
+One endpoint serves batting, pitching, and fielding boards (and the minor leagues via `league="minor"`). The full pitching board is ~540 columns per row, including the Stuff+ family (`sp_stuff`, `sp_location`, `sp_pitching`, per-pitch grades like `sp_s_FF`) and the PitchingBot family (`pb_stuff`, `pb_command`, `pb_overall`, `pb_xRV100`). None of it requires a membership.
+
+```python
+from fungo import fangraphs
+
+# 2025 qualified batting leaders (Dashboard columns), sorted by WAR.
+rows = fangraphs.get_leaders("bat", 2025)
+
+# Pitching leaders with Stuff+ / PitchingBot columns.
+pitchers = fangraphs.get_leaders("pit", 2025, qual=50)
+
+# Multi-year span, one row per player per season.
+span = fangraphs.get_leaders("bat", 2023, 2025, ind=1)
+
+# Handedness splits (narrower column set).
+vs_lhp = fangraphs.get_splits("bat", 2025, "vs_lhp")
+```
+
+Param traps handled for you: FanGraphs' `season` param is the *end* year and `season1` the *start* (the wrappers take `start_season`/`end_season`); `month=13/14` are the vs-LHP/vs-RHP split codes; `qual="y"` means qualified only.
+
+### Splits Leaderboards
+
+The full Splits Leaderboards page (a POST-only API, distinct from the `month=13/14` splits above) composes arbitrary split filters with date ranges, stat groups, and qualifier filters:
+
+```python
+rows = fangraphs.get_split_leaders(
+    "B", 2025, ["vs_lhp"],
+    filters=[{"stat": "PA", "comp": "gt", "low": "100", "high": -99,
+              "auto": False, "pending": True, "label": "PA >= 100", "value": 0}],
+)
+```
+
+Named splits include handedness (`vs_lhp`, `vs_rhp`, `vs_lhh`, `vs_rhh`), base states (`risp`, `bases_empty`, `runners_on`, `bases_loaded`), leverage (`high_leverage`, `medium_leverage`, `low_leverage`), calendar (`march_april` through `sept_oct`, `day`, `night`, `first_half`, `second_half`), batted-ball type (`grounders`, `flyballs`, `line_drives`, `pull`, `center`, `oppo`), and more -- see `SPLIT_CODES`. The full 292-code registry is in `SPLIT_CODE_TABLE` (code integer to human label). Home/away are position-dependent: `"home"` resolves to code 7 for batters and 9 for pitchers automatically. Raw integer codes work too, and multiple splits combine.
+
+The `pitch_splits` keyword filters by pitch type or count (`"fourseam"`, `"slider"`, `"count_3_2"`, etc. -- see `PITCH_SPLIT_CODES`; full 47-code table in `PITCH_SPLIT_CODE_TABLE`):
+
+### Projections
+
+ZiPS, Steamer, ATC, THE BAT/X, OOPSY, and Depth Charts, as one call each — typed values, the FanGraphs/MLBAM id crosswalk, and (Steamer only) uncertainty quantiles:
+
+```python
+proj = fangraphs.get_projections("steamer", "bat")   # 4,000+ players
+zips = fangraphs.get_projections("zips", "pit")
+```
+
+Rest-of-season variants use the `r`-prefixed slugs in `ROS_PROJECTION_SYSTEMS` (community-reported; Steamer's is irregularly `steamerr`).
+
+### Player Stats And Game Logs
+
+```python
+info = fangraphs.get_player_stats(15640, "OF")   # Aaron Judge
+logs = fangraphs.get_game_log(15640, 2025)       # game log; rows under "mlb"
+```
+
+The stats payload's `data` rows mix record kinds, discriminated by `type`: `0` = MLB regular season, `900` = playoff/split, `1000` = league average, negative values = projection systems (ZiPS, Steamer, ATC, THE BAT).
+
+### RosterResource
+
+RosterResource pages have no public API route; fungo extracts the JSON payload embedded in the server-rendered page. One call returns everything the depth chart shows:
+
+```python
+chart = fangraphs.get_depth_chart("rangers")
+chart["dataRoster"]              # full roster with roles
+chart["dataProbableStarters"]    # probable starters
+chart["dataRecentTransactions"]  # transaction log
+```
+
+### Guts And Park Factors
+
+The one HTML-backed corner of FanGraphs (small stable tables; all values strings, per fungo's CSV convention):
+
+```python
+constants = fangraphs.get_guts_constants()             # wOBA weights, cFIP, run env
+pf = fangraphs.get_park_factors(2025)
+pfh = fangraphs.get_park_factors_by_handedness(2025)
+```
+
+### THE BOARD (Prospects)
+
+```python
+board = fangraphs.get_prospect_board(2026)   # ~1,300 prospects: FV, risk, tool grades
+```
+
+### Access Notes
+
+FanGraphs fronts its site with Cloudflare, which blocks generic HTTP clients; fungo rides the one known exemption (the FanGraphs mobile app's `okhttp` User-Agent). If FanGraphs withdraws that exemption, calls fail loudly with `FangraphsError` explaining the condition. FanGraphs states automated access is "not supported" — endpoints can change without notice. Be polite: fetch what you need, cache locally, and don't loop over the league.
+
+## Baseball-Reference
+
+The `fungo.bbref` namespace provides polite, on-demand, single-page fetchers. Sports Reference tolerates rate-limited automated access but prohibits bulk harvesting; every request routes through a process-wide rate limiter (~9 requests/minute, under both their stated 20/min ceiling and the community-tested 10/min practical limit), and a 403/429 raises `BBRefError` with jail guidance instead of retrying.
+
+### WAR Daily Files
+
+Plain CSV flat files with bWAR and its full component breakdown for every player season in history — the one B-R endpoint that needs no HTML parsing:
+
+```python
+from fungo import bbref
+
+war = bbref.get_war_daily_batting()    # ~126k rows, all of MLB history
+```
+
+### Player Pages, Game Logs, And Splits
+
+One page fetch extracts *every* table on the page at once — including the ones B-R defers inside HTML comments — so a single request yields standard/advanced/value batting, fielding, appearances, salaries, and postseason tables together:
+
+```python
+from fungo import bbref, lookup
+
+bbref_id = lookup.mlbam_to_bbref(545361)      # "troutmi01"
+
+tables = bbref.get_player(bbref_id)           # dict: table id -> rows
+tables["players_standard_batting"]
+tables["br-salaries"]
+
+logs = bbref.get_game_log(bbref_id, 2024)     # gl.fcgi, all tables
+splits = bbref.get_splits(bbref_id, 2024)     # split.fcgi ("Career" default)
+sched = bbref.get_team_schedule("NYY", 2024)
+```
+
+Cells are keyed by B-R's stable `data-stat` attributes; all values are strings.
+
+### Standings, Draft, Box Scores, And The Minor-League Register
+
+```python
+standings = bbref.get_standings(2024)
+standings["standings_E"]      # AL East (duplicate-id pages: AL first...)
+standings["standings_E_2"]    # ...NL East suffixed
+standings["expanded_standings_overall"]   # all 30 teams (only table pre-1969)
+
+picks = bbref.get_draft(2022, 1)                    # one round of the draft
+tbr = bbref.get_draft_by_team("TBD", 2011)          # historical franchise codes: ANA/FLA/TBD
+
+day = bbref.get_daily("2024-06-15")                 # scoreboard: box-score links + 16 standings tables
+box = bbref.get_box_score("NYY", "2024-10-30")      # franchise code auto-mapped to NYA
+box["linescore"]; box["play_by_play"]
+
+minors_id = lookup.lookup(mlbam=683953)[0]["key_bbref_minors"]
+reg = bbref.get_register_player(minors_id)          # season-by-season MiLB stats by level
+```
+
+Box-score URLs use Retrosheet-style home codes (`NYA`, `SLN`, `CHN`, ...) — `get_box_score` maps modern franchise codes automatically (`BOX_SCORE_TEAM_CODES`). Register ids are the Chadwick `key_bbref_minors` values; never construct them from names (the format's sequence numbers are inconsistent).
+
+### Rate Limiting And Etiquette
+
+The limiter is intentionally not user-configurable below its safe default, and `map_concurrent`-style fan-out is deliberately absent from this namespace. Fetch single pages on demand, cache what you fetch, and use the WAR files / Retrosheet / Lahman / Chadwick for anything bulk. If you get a 403/429, stop — Sports Reference's rate-limit jail can last a day, and retrying extends it.
+
+### Response Caching
+
+An opt-in local cache avoids re-fetching pages you already have. A cache hit skips the rate limiter entirely — no delay, no budget spent:
+
+```python
+from fungo import bbref
+
+# Enable once at the top of your script. Historical pages are immutable,
+# so no TTL is needed. Pass ttl=<seconds> for current-season pages
+# (standings, daily scoreboards) that change as the season progresses.
+bbref.enable_cache()
+
+# Repeat calls for the same URL are free — served from disk.
+tables = bbref.get_player("troutmi01")
+tables_again = bbref.get_player("troutmi01")  # no network request
+
+# Remove cached files (e.g. to force a refresh).
+bbref.clear_cache()
+```
+
+Cache files land in `~/.cache/fungo/bbref_cache/` (or `$XDG_CACHE_HOME/fungo/bbref_cache/`). Pass `path=` to `enable_cache` for a custom location.
+
 ## Player ID Lookup
 
 `fungo.lookup` provides player ID cross-reference helpers backed by the Chadwick Bureau register. The register is fetched on demand and cached under your user cache directory (`$XDG_CACHE_HOME` or `~/.cache`, then `fungo/chadwick_people.csv`).
@@ -337,19 +524,19 @@ lookup.refresh()
 
 ## DataFrames
 
-The core returns raw rows. Convert explicitly with `to_frame`, which imports the backend lazily.
+The core returns raw rows — wrap them in whatever DataFrame library you already use. Both `polars` and `pandas` accept `list[dict]` directly:
 
 ```python
-from fungo import to_frame
+import polars as pl  # or: import pandas as pd
 from fungo.statcast import get_expected_statistics
 
 rows = get_expected_statistics(year=2024, type="batter", min_pa=300)
-df = to_frame(rows, backend="polars")   # or backend="pandas"
+df = pl.DataFrame(rows)   # or: pd.DataFrame(rows)
 ```
 
 ## Command Line
 
-The `fungo` console script exposes four subcommands. `--format` defaults to `csv` for `lookup`, `search`, and `leaderboard`, and `json` for `mlb`. `-o/--output` writes to a file instead of stdout.
+The `fungo` console script exposes six subcommands. `--format` defaults to `csv` for `lookup`, `search`, and `leaderboard`, and `json` for `mlb`, `fangraphs`, and `bbref`. `-o/--output` writes to a file instead of stdout.
 
 ```bash
 # Player ID lookup
@@ -366,9 +553,17 @@ fungo leaderboard bat-tracking/swing-timing-miss-distance --season 2023,2024
 # MLB Stats API
 fungo mlb get_schedule --date=2024-07-16
 fungo mlb --list
+
+# FanGraphs
+fungo fangraphs get_leaders --stats=pit --start-season=2025
+fungo fangraphs --list
+
+# Baseball-Reference (rate-limited)
+fungo bbref get_player --bbref-id=troutmi01
+fungo bbref --list
 ```
 
-`search`, `leaderboard`, and `mlb` accept arbitrary `--field=value` passthrough arguments. Only `search` pipe-joins comma-separated values for Baseball Savant filters.
+`search`, `leaderboard`, `mlb`, `fangraphs`, and `bbref` accept arbitrary `--field=value` passthrough arguments. Only `search` pipe-joins comma-separated values for Baseball Savant filters.
 
 ## Changelog
 
