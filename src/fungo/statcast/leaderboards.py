@@ -33,8 +33,8 @@ emits the season into the query string:
                        (single year -> both equal; ranges supported)
     season_array       ``season[]=<YYYY>``           (array param, repeatable)
 
-The three bat-tracking boards IGNORE the legacy ``year=`` param: passing it
-silently returns the current season. They were corrected (per live research) to
+The three bat-tracking boards IGNORE the standard ``year=`` param: passing it
+silently returns the current season. Their registry entries use
 ``camelCase_season`` (``bat-tracking``, ``bat-tracking/swing-path-attack-angle``)
 and ``season_array`` (``bat-tracking/swing-timing-miss-distance``).
 """
@@ -58,7 +58,7 @@ LEADERBOARD_PATHS: dict[str, str] = {
     "directional-oaa": "/directional_outs_above_average",
     # Primary running-splits path. /leaderboard/running-splits returns 404.
     "running-splits": "/running_splits",
-    "running-splits-alt": "/running_splits",  # back-compat alias
+    "running-splits-alt": "/running_splits",  # alternate slug alias
     "sprint-speed-alt": "/sprint_speed_leaderboard",
     "catch-probability-alt": "/catch_probability_leaderboard",
     "expected-stats-alt": "/expected_statistics",
@@ -1044,10 +1044,10 @@ def _emit_year(
 ) -> None:
     """Emit the season into ``query`` using the slug's ``year_format``.
 
-    This is the load-bearing fix: the bat-tracking boards ignore ``year=`` and
-    silently return the current season unless their camelCase / array params are
-    emitted instead. The two camelCase boards take a contiguous RANGE; the array
-    board takes a true multi-select.
+    The bat-tracking boards ignore ``year=`` and silently return the current
+    season unless their camelCase / array params are emitted. The two
+    camelCase boards take a contiguous RANGE; the array board takes a true
+    multi-select.
 
     - ``int`` / ``special`` -> ``year=<str(year)>`` (``special`` expects a
       pre-composed string; build it with :func:`active_spin_year`).
@@ -1056,7 +1056,7 @@ def _emit_year(
       single year.
     - ``season_array`` -> ``season[]`` as a LIST value; transport's
       ``urlencode(..., doseq=True)`` repeats it (``season[]=2023&season[]=2024``).
-      A scalar year becomes a one-element list.
+      A scalar year is emitted as a one-element list.
 
     Unknown slugs default to ``int``.
 
@@ -1253,7 +1253,7 @@ def _cast_numeric(
         cols: Columns to coerce, or ``None`` to use every key in the first row.
 
     Returns:
-        A new ``list[dict]`` with coerced values.
+        A ``list[dict]`` with coerced values.
     """
     if not rows:
         return []

@@ -101,7 +101,9 @@ The `fungo.statcast` namespace wraps Baseball Savant search, leaderboard, and de
 
 ### Pitch-Level Search
 
-`search_pitches(...)` fetches pitch-level Baseball Savant CSV data. Ranges longer than five days are split into one-day requests and fetched concurrently to avoid Savant's row cap. `statcast_search(...)` remains available as a compatibility alias.
+`search_pitches(...)` fetches pitch-level Baseball Savant CSV data. Ranges
+longer than five days are split into one-day requests and fetched concurrently
+to avoid Savant's row cap. `statcast_search(...)` is an alias.
 
 ```python
 from fungo.statcast import search_pitches
@@ -225,11 +227,15 @@ enriched = add_spin_columns(pitches)
 clock = axis_to_clock(225)
 ```
 
-Added columns include induced/Magnus movement estimates, transverse acceleration, spin efficiency, inferred spin components, and clock-face tilt where inputs are available.
+Derived columns include induced/Magnus movement estimates, transverse
+acceleration, spin efficiency, inferred spin components, and clock-face tilt
+where inputs are available.
 
 ## MLB Stats API
 
-The `fungo.mlb` namespace is a pass-through wrapper for `statsapi.mlb.com`. Every function returns raw JSON and accepts the most common endpoint parameters. For unsupported or newly discovered routes, use `mlb_api(path, params)`.
+The `fungo.mlb` namespace is a pass-through wrapper for `statsapi.mlb.com`.
+Every function returns raw JSON and accepts the most common endpoint parameters.
+For unsupported or less common routes, use `mlb_api(path, params)`.
 
 ### Low-Level API
 

@@ -2,7 +2,7 @@
 
 Operates on ``list[dict]`` rows (Savant CSV output). Each required input column
 must be castable to float; rows missing any input (or producing an invalid
-physical solution) are returned unchanged, with no derived keys added.
+physical solution) are returned unchanged, with no derived keys.
 
 Required input columns per row:
     ``release_extension``, ``vx0``, ``vy0``, ``vz0``, ``ax``, ``ay``, ``az``,
@@ -13,7 +13,7 @@ NOT ``spinx/spiny/spinz`` — those come from aggregate Savant exports or from
 TrackMan. For standard search rows, use ``spin_axis`` + ``release_spin_rate``
 for partial analysis, or bring your own spin-component columns.
 
-Added output columns (all floats), per :data:`DERIVED_COLUMNS`: induced vs gyro
+Output columns (all floats), per :data:`DERIVED_COLUMNS`: induced vs gyro
 spin, Magnus / non-Magnus decomposition, spin efficiency, drag, lift, tilt,
 release mechanics, and flight timing.
 
@@ -355,7 +355,7 @@ def add_spin_columns(
         inplace: If True, mutate the input dicts. Otherwise return new dicts.
 
     Returns:
-        ``list[dict]`` with the :data:`DERIVED_COLUMNS` set added. Rows missing
+        ``list[dict]`` with the :data:`DERIVED_COLUMNS` set. Rows missing
         required inputs (or yielding an invalid solution) are left untouched.
     """
     out: list[dict[str, Any]] = []

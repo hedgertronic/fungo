@@ -236,7 +236,7 @@ TEAMS: dict[str, dict[str, Any]] = {
     },
 }
 
-# The 30 codes, kept for back-compat with the search-params docs.
+# The 30 codes used by Baseball Savant search-params docs.
 TEAM_CODES: list[str] = list(TEAMS)
 
 

@@ -72,7 +72,7 @@ class ValidationError(FungoError, ValueError):
 
     Args:
         value: The offending input value.
-        field_name: Name of the field/parameter the value was supplied for.
+        field_name: Name of the field/parameter associated with the value.
         valid_values: Optional collection of accepted values, used to build a
             suggestion and to list the allowed options.
     """

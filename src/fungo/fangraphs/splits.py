@@ -6,7 +6,7 @@ narrow column set): this endpoint powers the site's Splits Leaderboards page
 and composes arbitrary split filters (vs hand, home, RISP, day/night, ...)
 with date ranges and stat groups.
 
-The full split-code table is now built into this module. ``SPLIT_CODE_TABLE``
+The full split-code table lives in this module. ``SPLIT_CODE_TABLE``
 maps 292 integer codes to human-readable labels (recovered from the
 splits-leaderboards page inline JS, 2026-07-06). ``PITCH_SPLIT_CODE_TABLE``
 maps 47 pitch-split codes (pitch type, count, zone). Named shortcuts for the
@@ -30,8 +30,7 @@ from fungo.fangraphs.api import fg_json_post
 #####################################################################
 
 # Position-aware shortcuts. A dict value maps position arg "B"/"P" to the
-# code. NOTE: "home" previously hard-coded to 9 (pitcher home) -- this
-# position-aware form is the fix.
+# FanGraphs code because home/away codes differ by batter/pitcher view.
 SPLIT_CODES: dict[str, int | dict[str, int]] = {
     # handedness
     "vs_lhp": 1,

@@ -23,7 +23,7 @@ Example::
     # Inspect / clean the cache directory.
     deleted = bbref.clear_cache()
 
-    # Turn it off again (the directory is not removed).
+    # Turn it off again (the directory remains on disk).
     bbref.disable_cache()
 """
 
@@ -104,8 +104,8 @@ def disable_cache() -> None:
     """Disable the local response cache (the default state).
 
     Subsequent calls to :func:`~fungo.bbref.session.bbref_bytes` go
-    through the rate limiter and network exactly as if the cache had never
-    been enabled. The cache directory and its files are not removed.
+    through the rate limiter and network. The cache directory and its files
+    remain on disk.
     """
     global _CACHE_ENABLED
     _CACHE_ENABLED = False
@@ -114,9 +114,9 @@ def disable_cache() -> None:
 def clear_cache() -> int:
     """Delete all cache entry files and return the count deleted.
 
-    Works whether or not the cache is currently enabled. The same default
-    directory as :func:`enable_cache` is resolved if no custom path was
-    set via a prior call to :func:`enable_cache`.
+    Works whether or not the cache is currently enabled. Resolves the same
+    default directory as :func:`enable_cache` unless a prior call set a
+    custom path.
 
     Returns:
         Number of cache files deleted.

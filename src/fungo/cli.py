@@ -327,7 +327,7 @@ def main(argv: list[str] | None = None) -> int:
         argv: Argument list (defaults to ``sys.argv[1:]``).
 
     Returns:
-        ``0`` on success, ``1`` if a ``FungoError`` was raised (reported as a
+        ``0`` on success, ``1`` for a ``FungoError`` (reported as a
         one-line ``error:`` message on stderr). Unexpected exceptions propagate.
     """
     parser = _build_parser()

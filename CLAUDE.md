@@ -11,7 +11,10 @@ Runtime dependencies are exactly **`beautifulsoup4` + `curl_cffi`** (both first-
 - CSV endpoints (Statcast search, most leaderboards, lookup, B-R tables/WAR files) return `list[dict]`; **every value is a string** (`""` for empty cells). Callers cast themselves.
 - JSON endpoints (the MLB Stats API, FanGraphs, HTML-backed Savant leaderboards) return the raw `dict` / `list` exactly as the source produced it. **FanGraphs values are native JSON numbers**, not strings.
 
-There is **no DataFrame helper** — `pl.DataFrame(rows)` / `pd.DataFrame(rows)` accept fungo output directly (a former `to_frame` wrapper was removed as over-engineering). `rich` progress bars are an opt-in extra. The library never writes to stdout unless `progress=True` is passed.
+There is **no DataFrame helper** — `pl.DataFrame(rows)` / `pd.DataFrame(rows)`
+accept fungo output directly, and callers wrap `list[dict]` output themselves.
+`rich` progress bars are an opt-in extra. The library never writes to stdout
+unless `progress=True` is passed.
 
 ## Commands
 
@@ -36,7 +39,10 @@ fungo bbref FUNCTION [--<field>=val ...]       |   fungo bbref --list
 - `--format` defaults to `csv` for `lookup`/`search`/`leaderboard` and `json` for `mlb`/`fangraphs`/`bbref`. CSV rendering requires a `list[dict]`; non-tabular results error and ask for `--format json`.
 - `search` and the function-passthrough subcommands accept arbitrary `--field=value` (or `--field value`) via `parse_known_args` → `_parse_extras`. **Only `search`** pipe-joins comma-separated values (`--pitch-type=FF,SL` → `FF|SL`, Savant's convention); the others pass values verbatim.
 - `mlb`/`fangraphs`/`bbref` share one handler (`_run_module_function`) that dispatches `FUNCTION` onto the module's `__all__` (non-callables are excluded from `--list` and dispatch).
-- `--season 2023,2024` becomes a `list[int]`, valid only for the bat-tracking season-array / camelCase boards (see below). Passing a multi-year value to any other (`int`-format) board raises `ValidationError` — `_emit_year` fails loud rather than silently sending a mangled `year=`.
+- `--season 2023,2024` parses as a `list[int]`, valid only for the
+  bat-tracking season-array / camelCase boards (see below). Passing a
+  multi-year value to any other (`int`-format) board raises `ValidationError` —
+  `_emit_year` fails loud rather than silently sending a mangled `year=`.
 
 ## Architecture
 
@@ -93,6 +99,9 @@ Sports Reference publishes limits *for bots* (20 req/min stated; >10/min earns ~
 
 ## Conventions
 
-- New sources follow the same shape: a fetch seam per source (stdlib `http.py` where possible), source-specific quirks (HTML detection, param emission, UA requirements, rate limiting) isolated in that source's module, raw `list[dict]`/JSON out, DataFrame conversion left to the caller.
+- Additional sources follow the same shape: a fetch seam per source (stdlib
+  `http.py` where possible), source-specific quirks (HTML detection, param
+  emission, UA requirements, rate limiting) isolated in that source's module,
+  raw `list[dict]`/JSON out, DataFrame conversion left to the caller.
 - Fail loud — let stdlib/transport exceptions propagate; raise the typed `ValidationError`/`SavantError`/`MLBStatsError`/`RequestError` for input and source problems rather than bare exceptions or silent fallbacks.
 - Keep dependencies minimal: `beautifulsoup4` + `curl_cffi` are the only runtime deps (bbref needs them); `rich` stays an optional extra imported lazily. No DataFrame dependency ever — users wrap `list[dict]` output themselves.

@@ -129,13 +129,13 @@ def test_camelcase_tuple_range_through_transport(monkeypatch):
 @pytest.mark.parametrize("multi", [[2023, 2024], (2023, 2024)])
 def test_multiyear_on_int_board_raises_fail_loud(multi):
     # Only the bat-tracking boards support multi-year. An int/special board must
-    # NOT silently send str([2023, 2024]) as year= — it fails loud instead.
+    # reject list/tuple years rather than send str([2023, 2024]) as year=.
     with pytest.raises(ValidationError):
         lb._emit_year({}, "expected_statistics", multi)
 
 
 def test_multiyear_via_get_leaderboard_raises_before_network():
-    # The raise happens in _emit_year, before any request — so this needs no mock.
+    # _emit_year validates the year before any request, so this needs no mock.
     with pytest.raises(ValidationError):
         lb.get_leaderboard("expected_statistics", year=[2023, 2024])
 
