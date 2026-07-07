@@ -48,5 +48,5 @@ jobs:
         run: |
           python -m venv /tmp/fungo-smoke
           /tmp/fungo-smoke/bin/python -m pip install dist/*.whl
-          /tmp/fungo-smoke/bin/python -c "import fungo; assert fungo.__version__ == '1.0.0'"
+          /tmp/fungo-smoke/bin/python -c "import fungo; from importlib.metadata import version; assert fungo.__version__ == version('fungo'), fungo.__version__"
           /tmp/fungo-smoke/bin/fungo --help

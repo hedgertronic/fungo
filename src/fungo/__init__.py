@@ -24,7 +24,7 @@ from fungo.exceptions import (
 try:
     __version__ = version("fungo")
 except PackageNotFoundError:  # pragma: no cover - source tree fallback
-    __version__ = "1.0.0"
+    __version__ = "2.0.0"
 
 # Subpackages are the primary surface: `fungo.statcast.search_pitches(...)`,
 # `fungo.mlb.get_schedule(...)`, `fungo.lookup.lookup(...)`. The names below
