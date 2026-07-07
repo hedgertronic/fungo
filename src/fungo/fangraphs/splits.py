@@ -486,7 +486,7 @@ PITCH_SPLIT_CODE_TABLE: dict[int, str] = {
 def get_split_leaders(
     position: str,
     season: int | None = None,
-    splits: list[int | str] | None = None,
+    splits: int | str | list[int | str] | None = None,
     *,
     stat_group: str = "advanced",
     stat_type: str = "player",
@@ -494,7 +494,7 @@ def get_split_leaders(
     end_date: str | None = None,
     player_id: int | str = "all",
     filters: list[dict[str, Any]] | None = None,
-    pitch_splits: list[int | str] | None = None,
+    pitch_splits: int | str | list[int | str] | None = None,
     extra_body: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Fetch a splits leaderboard.
@@ -504,9 +504,10 @@ def get_split_leaders(
         season: Season year -- expands to a March-November date range. Pass
             explicit ``start_date``/``end_date`` instead for custom windows.
         splits: Split selections -- names from :data:`SPLIT_CODES` and/or raw
-            integer codes. Multiple splits combine. ``None`` = no split filter
-            (overall). Home/away resolve to the right code for the given
-            ``position`` (batter home=7, pitcher home=9).
+            integer codes; a single code/name or a list. Multiple splits
+            combine. ``None`` = no split filter (overall). Home/away resolve
+            to the right code for the given ``position`` (batter home=7,
+            pitcher home=9).
         stat_group: ``"standard"``, ``"advanced"``, or ``"batted_ball"``.
         stat_type: ``"player"`` or ``"team"``.
         start_date: ``YYYY-MM-DD`` range start (overrides ``season``).
@@ -517,8 +518,9 @@ def get_split_leaders(
             "auto": False, "pending": True, "label": "PA >= 100",
             "value": 0}]``.
         pitch_splits: Pitch-split selections -- names from
-            :data:`PITCH_SPLIT_CODES` and/or raw integer codes. Feeds
-            ``strSplitArrPitch``. ``None`` = no pitch-split filter.
+            :data:`PITCH_SPLIT_CODES` and/or raw integer codes; a single
+            code/name or a list. Feeds ``strSplitArrPitch``. ``None`` = no
+            pitch-split filter.
         extra_body: Passthrough fields merged over the built request body.
 
     Returns:
@@ -542,6 +544,11 @@ def get_split_leaders(
             raise ValidationError(None, "season (or explicit start_date/end_date)")
         start_date = start_date or f"{season}-03-01"
         end_date = end_date or f"{season}-11-30"
+
+    if isinstance(splits, int | str):
+        splits = [splits]
+    if isinstance(pitch_splits, int | str):
+        pitch_splits = [pitch_splits]
 
     codes: list[int] = []
     for s in splits or []:

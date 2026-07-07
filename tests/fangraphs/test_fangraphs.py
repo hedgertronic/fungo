@@ -329,6 +329,20 @@ def test_split_leaders_away_resolves_by_position(monkeypatch):
     assert log_p["body"]["strSplitArr"] == [10]  # pitcher away
 
 
+def test_split_leaders_accepts_bare_scalars(monkeypatch):
+    from fungo.fangraphs import splits
+
+    log = _capture_post(monkeypatch, SPLITS_PAYLOAD)
+    splits.get_split_leaders("B", 2025, "home", pitch_splits="fourseam")
+    assert log["body"]["strSplitArr"] == [7]
+    assert log["body"]["strSplitArrPitch"] == [1]
+
+    log_int = _capture_post(monkeypatch, SPLITS_PAYLOAD)
+    splits.get_split_leaders("B", 2025, 59, pitch_splits=111)
+    assert log_int["body"]["strSplitArr"] == [59]
+    assert log_int["body"]["strSplitArrPitch"] == [111]
+
+
 def test_split_leaders_unknown_pitch_split_name():
     from fungo.fangraphs import splits
 
