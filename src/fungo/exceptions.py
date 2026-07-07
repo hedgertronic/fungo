@@ -2,9 +2,10 @@
 
 All library errors derive from :class:`FungoError`. Transport failures raise
 :class:`RequestError`; Savant content errors raise :class:`SavantError`; MLB
-Stats API errors raise :class:`MLBStatsError`; bad client input raises
-:class:`ValidationError`, which also subclasses :class:`ValueError` and emits a
-``difflib``-powered "did you mean?" suggestion.
+Stats API errors raise :class:`MLBStatsError`; FanGraphs errors raise
+:class:`FangraphsError`; Baseball-Reference errors raise :class:`BBRefError`;
+bad client input raises :class:`ValidationError`, which also subclasses
+:class:`ValueError` and emits a ``difflib``-powered "did you mean?" suggestion.
 """
 
 from __future__ import annotations
@@ -36,6 +37,26 @@ class SavantError(FungoError):
 
 class MLBStatsError(FungoError):
     """MLB Stats API error."""
+
+
+class FangraphsError(FungoError):
+    """FanGraphs content or access error.
+
+    Raised when FanGraphs serves a Cloudflare challenge (HTTP 403) instead of
+    JSON — the API is reachable only because Cloudflare exempts the FanGraphs
+    mobile app's HTTP client (``User-Agent: okhttp/4.12.0``); if that exemption
+    is withdrawn, every call fails this way — or when a response is not the
+    expected JSON shape.
+    """
+
+
+class BBRefError(FungoError):
+    """Baseball-Reference content or access error.
+
+    Raised when a page is blocked (Cloudflare challenge / rate-limit jail),
+    when an expected table is missing from a page, or when a response is not
+    parseable HTML.
+    """
 
 
 #####################################################################

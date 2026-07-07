@@ -40,13 +40,15 @@ def request_bytes(
     retries: int = 3,
     timeout: int = 30,
     headers: dict[str, str] | None = None,
+    data: bytes | None = None,
 ) -> bytes:
-    """GET ``url`` and return the raw response body with retry/backoff.
+    """Fetch ``url`` and return the raw response body with retry/backoff.
 
-    Query params are URL-encoded with ``safe="|"`` so pipe-delimited Savant
-    parameters survive. ``None``-valued params are dropped. 4xx responses raise
-    immediately; 5xx / network / timeout errors retry with exponential backoff
-    (``2 ** attempt`` seconds).
+    GET by default; passing ``data`` sends it as a POST body (the caller sets
+    ``Content-Type`` via ``headers``). Query params are URL-encoded with
+    ``safe="|"`` so pipe-delimited Savant parameters survive. ``None``-valued
+    params are dropped. 4xx responses raise immediately; 5xx / network /
+    timeout errors retry with exponential backoff (``2 ** attempt`` seconds).
 
     Args:
         url: Target URL (with or without an existing query string).
@@ -54,6 +56,7 @@ def request_bytes(
         retries: Number of attempts before giving up.
         timeout: Per-request timeout in seconds.
         headers: Optional extra request headers (merged over the default UA).
+        data: Optional request body; its presence switches the method to POST.
 
     Returns:
         The raw response body as ``bytes``.
@@ -79,7 +82,7 @@ def request_bytes(
     last_err: Exception | None = None
     for attempt in range(retries):
         try:
-            req = urllib.request.Request(full_url, headers=req_headers)
+            req = urllib.request.Request(full_url, headers=req_headers, data=data)
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 return cast(bytes, resp.read())
         except urllib.error.HTTPError as e:
