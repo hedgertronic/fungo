@@ -33,6 +33,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (hydrate grammar and discovery).
 - CLI: `fungo retrosheet` and `fungo lahman` subcommands (function passthrough
   with `--list`, like `mlb`/`fangraphs`/`bbref`; CSV output by default).
+- CLI: passthrough values for parameters the target function annotates as
+  `bool` coerce from `true`/`false`, so `--force-refresh=false` arrives as a
+  real `False` instead of a truthy string.
 - `fungo.bbref`: opt-in local response cache (`enable_cache`, `disable_cache`,
   `clear_cache`). A cache hit skips the rate limiter entirely. Historical pages
   are immutable and need no TTL; current-season pages (standings, daily
@@ -71,11 +74,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- Behavior flags are keyword-only across the public API: `lookup()`'s
+- Boolean parameters are keyword-only across the public API: `lookup()`'s
   `mlb_only` / `force_refresh` and `add_spin_columns()`'s `inplace` (both
-  positional in 1.0), matching the new modules' `force_refresh` /
-  `live_fallback` flags. Boolean *data* parameters that mirror upstream query
-  params (e.g. `mlb.search_players(active=...)`) are unchanged.
+  positional in 1.0), the new modules' `force_refresh` / `live_fallback`
+  flags, and the boolean query params in `fungo.mlb` (`get_schedule`'s
+  `use_latest_games`, `get_seasons`'s `with_game_type_dates`,
+  `search_players`'s `active` — the parameters after each become
+  keyword-only too).
+- Boolean query-param values serialize as lowercase `true`/`false` on the
+  wire (`str(True)` would send `True`; lowercase is the canonical form).
 
 ### Removed
 

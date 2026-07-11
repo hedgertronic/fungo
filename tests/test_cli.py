@@ -344,6 +344,39 @@ def test_retrosheet_dispatch_and_csv_default(monkeypatch, capsys):
     assert out[0] == "player_id,name,velo"
 
 
+def test_bool_extras_coerce_for_bool_annotated_params(monkeypatch):
+    seen: dict[str, Any] = {}
+
+    def fake(*, force_refresh: bool = False) -> list[dict]:
+        seen["force_refresh"] = force_refresh
+        return ROWS
+
+    monkeypatch.setattr(cli.retrosheet, "get_biofile", fake)
+    assert cli.main(["retrosheet", "get_biofile", "--force-refresh=false"]) == 0
+    assert seen["force_refresh"] is False  # a real bool, not the truthy "false"
+    assert cli.main(["retrosheet", "get_biofile", "--force-refresh=true"]) == 0
+    assert seen["force_refresh"] is True
+
+
+def test_bool_extras_invalid_value_errors(monkeypatch):
+    def fake(*, force_refresh: bool = False) -> list[dict]:
+        return ROWS
+
+    monkeypatch.setattr(cli.retrosheet, "get_biofile", fake)
+    with pytest.raises(SystemExit, match="expects true/false"):
+        cli.main(["retrosheet", "get_biofile", "--force-refresh=maybe"])
+
+
+def test_bool_strings_pass_through_for_non_bool_params(monkeypatch, capsys):
+    # "true" as a value for a non-bool parameter stays a string.
+    def fake(**kwargs: Any) -> list[dict]:
+        assert kwargs == {"name": "true"}
+        return ROWS
+
+    monkeypatch.setattr(cli.lahman, "get_table", fake)
+    assert cli.main(["lahman", "get_table", "--name=true"]) == 0
+
+
 def test_lahman_dispatch_and_csv_default(monkeypatch, capsys):
     def fake(**kwargs: Any) -> list[dict]:
         assert kwargs == {"name": "Batting"}

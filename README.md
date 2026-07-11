@@ -627,7 +627,7 @@ fungo lahman get_table --name=Batting
 fungo lahman --list
 ```
 
-`search`, `leaderboard`, `mlb`, `fangraphs`, `bbref`, `retrosheet`, and `lahman` accept arbitrary `--field=value` passthrough arguments. Only `search` pipe-joins comma-separated values for Baseball Savant filters.
+`search`, `leaderboard`, `mlb`, `fangraphs`, `bbref`, `retrosheet`, and `lahman` accept arbitrary `--field=value` passthrough arguments. Only `search` pipe-joins comma-separated values for Baseball Savant filters. Values for parameters the target function annotates as `bool` coerce from `true`/`false` (so `--force-refresh=false` means `False`); everything else passes through as strings.
 
 ## Changelog
 

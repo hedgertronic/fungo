@@ -32,6 +32,7 @@ def get_schedule(
     schedule_types: str | list[str] | None = None,
     event_types: str | list[str] | None = None,
     schedule_event_types: str | list[str] | None = None,
+    *,
     use_latest_games: bool | None = None,
     timecode: str | None = None,
     hydrate: str | None = None,

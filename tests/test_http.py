@@ -56,6 +56,20 @@ def test_request_bytes_keeps_pipes_unencoded(monkeypatch):
     assert "hfPT=FF|SL|" in captured["url"]
 
 
+def test_request_bytes_serializes_bools_lowercase(monkeypatch):
+    # str(True) is "True"; query params want the canonical lowercase form.
+    captured: dict = {}
+
+    def fake_urlopen(req, timeout=None):
+        captured["url"] = req.full_url
+        return _FakeResp()
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    request_bytes("https://example.com/x", {"active": True, "flag": False})
+    assert "active=true" in captured["url"]
+    assert "flag=false" in captured["url"]
+
+
 def test_request_bytes_merges_custom_headers(monkeypatch):
     captured: dict = {}
 

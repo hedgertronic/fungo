@@ -261,6 +261,7 @@ def get_divisions(
 def get_seasons(
     sport_id: int | str | None = None,
     season: int | str | None = None,
+    *,
     with_game_type_dates: bool | None = None,
     division_id: int | str | None = None,
     league_id: int | str | None = None,

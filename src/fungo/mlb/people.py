@@ -75,6 +75,7 @@ def get_person(
 def search_players(
     names: str | None = None,
     person_ids: int | str | list[int | str] | None = None,
+    *,
     active: bool | None = None,
     current_team_id: int | str | None = None,
     sport_id: int | str | None = None,

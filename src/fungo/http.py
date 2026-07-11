@@ -47,8 +47,10 @@ def request_bytes(
     GET by default; passing ``data`` sends it as a POST body (the caller sets
     ``Content-Type`` via ``headers``). Query params are URL-encoded with
     ``safe="|"`` so pipe-delimited Savant parameters survive. ``None``-valued
-    params are dropped. 4xx responses raise immediately; 5xx / network /
-    timeout errors retry with exponential backoff (``2 ** attempt`` seconds).
+    params are dropped, and boolean values serialize as lowercase
+    ``true``/``false`` (the canonical query-param form; ``str(True)`` would
+    send ``True``). 4xx responses raise immediately; 5xx / network / timeout
+    errors retry with exponential backoff (``2 ** attempt`` seconds).
 
     Args:
         url: Target URL (with or without an existing query string).
@@ -66,7 +68,11 @@ def request_bytes(
     """
     if params:
         encoded = urllib.parse.urlencode(
-            {k: v for k, v in params.items() if v is not None},
+            {
+                k: "true" if v is True else "false" if v is False else v
+                for k, v in params.items()
+                if v is not None
+            },
             safe="|",
             doseq=True,
         )

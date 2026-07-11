@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import inspect
 import io
 import json
 import sys
@@ -74,6 +75,42 @@ def _parse_extras(extras: list[str], *, pipe_join: bool) -> dict[str, Any]:
             value = "|".join(value.split(","))
         out[key] = value
     return out
+
+
+def _coerce_bool_extras(func: Any, kwargs: dict[str, Any], module_name: str) -> None:
+    """Convert ``true``/``false`` strings to booleans, in place, for parameters
+    the target function annotates as ``bool``.
+
+    Every non-empty string is truthy, so without this ``--force-refresh=false``
+    would arrive as the truthy string ``"false"``. Only parameters whose
+    annotation names ``bool`` are coerced (``true``/``1`` and ``false``/``0``,
+    case-insensitive); everything else passes through verbatim, including
+    ``"true"`` as a value for a string-typed parameter.
+
+    Args:
+        func: The dispatched library function.
+        kwargs: Parsed passthrough kwargs, mutated in place.
+        module_name: Subcommand name, used in the error message.
+
+    Raises:
+        SystemExit: If a ``bool``-annotated parameter gets a value that is not
+            a recognized boolean spelling.
+    """
+    parameters = inspect.signature(func).parameters
+    for key, value in kwargs.items():
+        param = parameters.get(key)
+        if param is None or "bool" not in str(param.annotation):
+            continue
+        lowered = str(value).lower()
+        if lowered in ("true", "1"):
+            kwargs[key] = True
+        elif lowered in ("false", "0"):
+            kwargs[key] = False
+        else:
+            flag = "--" + key.replace("_", "-")
+            raise SystemExit(
+                f"fungo {module_name}: {flag} expects true/false, got {value!r}"
+            )
 
 
 def _parse_seasons(value: str | None) -> int | list[int] | None:
@@ -185,8 +222,9 @@ def _run_module_function(
     module: Any, module_name: str, args: argparse.Namespace, extras: list[str]
 ) -> Any:
     """Shared handler for the function-passthrough subcommands (mlb,
-    fangraphs, bbref): dispatch ``FUNCTION --key=value ...`` onto a public
-    function listed in the module's ``__all__``."""
+    fangraphs, bbref, retrosheet, lahman): dispatch ``FUNCTION --key=value ...``
+    onto a public function listed in the module's ``__all__``. Values for
+    ``bool``-annotated parameters coerce from ``true``/``false``."""
     if args.list:
         return [
             {"function": name}
@@ -204,8 +242,10 @@ def _run_module_function(
             f"fungo {module_name}: unknown function {args.function!r}; "
             "use --list for options"
         )
+    func = getattr(module, args.function)
     kwargs = _parse_extras(extras, pipe_join=False)
-    return getattr(module, args.function)(**kwargs)
+    _coerce_bool_extras(func, kwargs, module_name)
+    return func(**kwargs)
 
 
 def _run_mlb(args: argparse.Namespace, extras: list[str]) -> Any:

@@ -39,7 +39,7 @@ fungo lahman FUNCTION [--<field>=val ...]      |   fungo lahman --list
 ```
 
 - `--format` defaults to `json` for `mlb`/`fangraphs`/`bbref` and `csv` for everything else. CSV rendering requires a `list[dict]`; non-tabular results error and ask for `--format json`.
-- `search` and the function-passthrough subcommands accept arbitrary `--field=value` (or `--field value`) via `parse_known_args` → `_parse_extras`. **Only `search`** pipe-joins comma-separated values (`--pitch-type=FF,SL` → `FF|SL`, Savant's convention); the others pass values verbatim (retrosheet coerces string years to `int` internally, so `--year=2024` works).
+- `search` and the function-passthrough subcommands accept arbitrary `--field=value` (or `--field value`) via `parse_known_args` → `_parse_extras`. **Only `search`** pipe-joins comma-separated values (`--pitch-type=FF,SL` → `FF|SL`, Savant's convention); the others pass values verbatim (retrosheet coerces string years to `int` internally, so `--year=2024` works). Values for params the dispatched function annotates as `bool` coerce from `true`/`false` (`_coerce_bool_extras`) — `--force-refresh=false` is a real `False`, not a truthy string.
 - `mlb`/`fangraphs`/`bbref`/`retrosheet`/`lahman` share one handler (`_run_module_function`) that dispatches `FUNCTION` onto the module's `__all__` (non-callables are excluded from `--list` and dispatch).
 - `--season 2023,2024` parses as a `list[int]`, valid only for the
   bat-tracking season-array / camelCase boards (see below). Passing a
