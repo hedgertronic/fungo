@@ -4,8 +4,10 @@ All library errors derive from :class:`FungoError`. Transport failures raise
 :class:`RequestError`; Savant content errors raise :class:`SavantError`; MLB
 Stats API errors raise :class:`MLBStatsError`; FanGraphs errors raise
 :class:`FangraphsError`; Baseball-Reference errors raise :class:`BBRefError`;
-bad client input raises :class:`ValidationError`, which also subclasses
-:class:`ValueError` and emits a ``difflib``-powered "did you mean?" suggestion.
+Lahman access errors raise :class:`LahmanError`; bad client input raises
+:class:`ValidationError`, which also subclasses :class:`ValueError` and emits
+a ``difflib``-powered "did you mean?" suggestion. :class:`StaleCacheWarning`
+flags aging local caches.
 """
 
 from __future__ import annotations
@@ -57,6 +59,28 @@ class BBRefError(FungoError):
     when an expected table is missing from a page, or when a response is not
     parseable HTML.
     """
+
+
+class LahmanError(FungoError):
+    """Lahman database access error.
+
+    The Lahman CSVs are hosted on SABR's Box account behind shared links that
+    change with each annual release; fungo discovers them by parsing
+    ``sabr.org/lahman-database`` and the Box folder page. Raised when either
+    page no longer matches the expected structure or a table download fails.
+    The message names the recovery step: ``fungo.lahman.refresh()`` when a
+    stale cached index is the likely cause (download failures), otherwise
+    re-verification against the SABR page — not a blind retry.
+    """
+
+
+#####################################################################
+# Warnings
+#####################################################################
+
+
+class StaleCacheWarning(UserWarning):
+    """A locally cached dataset is old enough that a refresh is advisable."""
 
 
 #####################################################################

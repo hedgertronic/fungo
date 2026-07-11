@@ -15,6 +15,7 @@ from fungo.mlb.discovery import (
     get_game_status,
     get_game_types,
     get_hit_trajectories,
+    get_hydrations,
     get_job_types,
     get_languages,
     get_league_leader_types,
@@ -191,6 +192,7 @@ __all__ = [  # noqa: RUF022  -- grouped by module for integration re-export
     "get_uniforms_game",
     "get_uniforms_team",
     # discovery
+    "get_hydrations",
     "get_stat_types",
     "get_stat_groups",
     "get_game_types",

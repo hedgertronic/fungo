@@ -1,6 +1,6 @@
 # Fungo for Python <!-- omit in toc -->
 
-Python tools for baseball data from [Statcast](https://baseballsavant.mlb.com), the [MLB Stats API](https://statsapi.mlb.com), [FanGraphs](https://www.fangraphs.com), and [Baseball-Reference](https://www.baseball-reference.com).
+Python tools for baseball data from [Statcast](https://baseballsavant.mlb.com), the [MLB Stats API](https://statsapi.mlb.com), [FanGraphs](https://www.fangraphs.com), [Baseball-Reference](https://www.baseball-reference.com), [Retrosheet](https://www.retrosheet.org), and the [Lahman Database](https://sabr.org/lahman-database/).
 
 Fungo is a small data-access library for researchers, analysts, and developers who want raw baseball data without committing to a DataFrame stack. It carries exactly two runtime dependencies (`beautifulsoup4` and `curl_cffi`, both for Baseball-Reference); everything else is stdlib. CSV endpoints return `list[dict]` with string values, JSON endpoints return raw payloads exactly as the source produced them, and results drop straight into whatever DataFrame library you already use (`pl.DataFrame(rows)` / `pd.DataFrame(rows)`).
 
@@ -38,6 +38,8 @@ Fungo is a small data-access library for researchers, analysts, and developers w
   - [Standings, Draft, Box Scores, And The Minor-League Register](#standings-draft-box-scores-and-the-minor-league-register)
   - [Rate Limiting And Etiquette](#rate-limiting-and-etiquette)
   - [Response Caching](#response-caching)
+- [Retrosheet](#retrosheet)
+- [Lahman Database](#lahman-database)
 - [Player ID Lookup](#player-id-lookup)
 - [DataFrames](#dataframes)
 - [Command Line](#command-line)
@@ -61,8 +63,6 @@ Install optional extras when you need them:
 ```bash
 uv add "fungo[progress]"    # rich progress bars on long pulls
 ```
-
-There is no DataFrame extra — fungo returns `list[dict]` / `dict`, which `polars` and `pandas` both accept directly.
 
 For local development:
 
@@ -91,7 +91,7 @@ schedule = mlb.get_schedule(date="2024-07-16")
 
 The library returns raw data by design:
 
-- CSV endpoints (Statcast search/leaderboards, Baseball-Reference tables and WAR files) return `list[dict]`; every value is a string, with `""` for empty cells.
+- CSV endpoints (Statcast search/leaderboards, Baseball-Reference tables and WAR files, Retrosheet downloads, Lahman tables) return `list[dict]`; every value is a string, with `""` for empty cells.
 - JSON endpoints (MLB Stats API, FanGraphs) return the raw payload exactly as the source produced it — FanGraphs values arrive as native JSON numbers.
 - Wrap any tabular result in your DataFrame library of choice: `pl.DataFrame(rows)` or `pd.DataFrame(rows)`.
 
@@ -127,6 +127,11 @@ Important options:
 - `home_road`: home/away filter for team searches.
 - `level`: `"mlb"` or `"milb"`.
 - arbitrary Savant filters such as `hfPT`, `hfBBT`, `hfGT`, or `game_date_gt`.
+
+Savant itself documents only the *output* columns; the complete input-param
+vocabulary (every `hf*` filter with its accepted values, the `metric_N`
+columns, serialization rules) is cataloged in
+[docs/savant-search-params.md](docs/savant-search-params.md).
 
 Multi-value filters use Baseball Savant's pipe convention:
 
@@ -192,7 +197,7 @@ print(list_leaderboards(category="catching"))
 
 ### Bat Tracking
 
-The Hawk-Eye bat-tracking boards use newer Baseball Savant season parameters. The wrappers handle those differences for you:
+The Hawk-Eye bat-tracking boards take season parameters that differ from every other Baseball Savant board. The wrappers emit the correct form for each:
 
 - `get_bat_tracking`
 - `get_swing_path_attack_angle`
@@ -218,7 +223,7 @@ Some Baseball Savant pages do not expose CSV. Fungo parses their inline JSON:
 
 ### Derived Spin Physics
 
-`add_spin_columns(...)` adds Alan Nathan-style derived spin physics columns to Statcast pitch rows. It is opt-in; search does not mutate or enrich rows automatically.
+`add_spin_columns(...)` adds Alan Nathan-style derived spin physics columns to Statcast pitch rows fetched by search.
 
 ```python
 from fungo.statcast import add_spin_columns, axis_to_clock
@@ -312,7 +317,13 @@ stats = mlb.get_stats(stats="season", group="hitting", season=2024)
 
 ### League And Baseball Metadata
 
-Discovery endpoints return valid parameter values and metadata used by the other wrappers:
+Discovery endpoints return valid parameter values and metadata used by the other wrappers. `get_hydrations(path)` asks an endpoint which `hydrate=` values it accepts — the Stats API self-documents via `hydrate=hydrations` — and the hydration syntax itself (nesting, brackets, the `stats(...)` form) is covered in [docs/mlb-hydrations.md](docs/mlb-hydrations.md):
+
+```python
+mlb.get_hydrations("/api/v1/people/545361")   # ['awards', 'currentTeam', ...]
+```
+
+The full discovery set:
 
 - Stat/game metadata: `get_stat_types`, `get_stat_groups`, `get_game_types`, `get_game_status`, `get_baseball_stats`, `get_metrics`
 - Field/game descriptors: `get_positions`, `get_situation_codes`, `get_pitch_types`, `get_hit_trajectories`, `get_event_types`, `get_schedule_event_types`
@@ -414,7 +425,7 @@ chart["dataRecentTransactions"]  # transaction log
 
 ### Guts And Park Factors
 
-The one HTML-backed corner of FanGraphs (small stable tables; all values strings, per fungo's CSV convention):
+The one HTML-backed corner of FanGraphs — small, stable tables whose values are all strings:
 
 ```python
 constants = fangraphs.get_guts_constants()             # wOBA weights, cFIP, run env
@@ -489,7 +500,7 @@ Box-score URLs use Retrosheet-style home codes (`NYA`, `SLN`, `CHN`, ...) — `g
 
 ### Rate Limiting And Etiquette
 
-The limiter is intentionally not user-configurable below its safe default, and `map_concurrent`-style fan-out is deliberately absent from this namespace. Fetch single pages on demand, cache what you fetch, and use the WAR files / Retrosheet / Lahman / Chadwick for anything bulk. If you get a 403/429, stop — Sports Reference's rate-limit jail can last a day, and retrying extends it.
+The limiter cannot be loosened past its safe default, and this namespace has no concurrent-fetch helpers — every request runs sequentially through the limiter. Fetch single pages on demand, cache what you fetch, and use the WAR files / Retrosheet / Lahman / Chadwick for anything bulk. If you get a 403/429, stop — Sports Reference's rate-limit jail can last a day, and retrying extends it.
 
 ### Response Caching
 
@@ -513,6 +524,42 @@ bbref.clear_cache()
 
 Cache files land in `~/.cache/fungo/bbref_cache/` (or `$XDG_CACHE_HOME/fungo/bbref_cache/`). Pass `path=` to `enable_cache` for a custom location.
 
+## Retrosheet
+
+The `fungo.retrosheet` namespace downloads Retrosheet's published data files — parsed play-by-play, game logs, schedules, per-game stats, and the biofile. Retrosheet is a static file host refreshed in roughly twice-yearly bulk releases, so each dataset downloads once into the user cache dir (`fungo/retrosheet/`) and is served from disk afterward; `refresh(dataset, year)` re-downloads and `clear_cache()` wipes.
+
+```python
+from fungo import retrosheet
+
+plays = retrosheet.get_plays(2024)       # parsed play-by-play (1903+), 177 columns
+logs = retrosheet.get_game_logs(2024)    # one row per game (1871+), 161 fields
+sked = retrosheet.get_schedule(2026)     # full season schedule (1877+)
+bio = retrosheet.get_biofile()           # players/managers/umpires with Retrosheet IDs
+info = retrosheet.get_gameinfo(2024)     # per-game metadata: weather, umpires, attendance
+```
+
+The per-season accessors — `get_gameinfo`, `get_batting`, `get_pitching`, `get_fielding`, `get_teamstats`, `get_allplayers` — share one `{year}csvs.zip` download (1903+). `get_coaches()` and `get_relatives()` ride the biofile download. The parsed CSVs make Retrosheet's raw event files (and the Chadwick `cwevent`/`cwgame` tools) unnecessary for most uses.
+
+Game logs are headerless and the schedule header carries colliding names, so rows for both are keyed by the `GAME_LOG_FIELDS` (161 names, from Retrosheet's `glfields.txt`) and `SCHEDULE_FIELDS` constants. All values are strings.
+
+Retrosheet's data is free for any use, with one licensing condition — prominent display of this notice:
+
+> The information used here was obtained free of charge from and is copyrighted by Retrosheet. Interested parties may contact Retrosheet at "www.retrosheet.org".
+
+## Lahman Database
+
+The `fungo.lahman` namespace fetches the SABR-hosted Lahman Database CSVs — season-level batting/pitching/fielding, biographical data, teams, awards, salaries, and more, 1871 through the most recent complete season (CC BY-SA 3.0; annual releases). Tables cache under `fungo/lahman/`, and a cache hit makes no network requests until `refresh()`.
+
+```python
+from fungo import lahman
+
+lahman.list_tables()                 # 27 tables: People, Batting, Teams, Parks, ...
+batting = lahman.get_table("Batting")
+people = lahman.get_people()         # shortcuts: People/Batting/Pitching/Fielding/Teams
+```
+
+Access rides an undocumented seam: SABR hosts the files as Box shared links that change with each annual release, so fungo discovers the current links at runtime by parsing the SABR page and the (paginated) Box folder listing. If either page's structure changes, calls fail loudly with `LahmanError` naming the failed step — re-verify against [sabr.org/lahman-database](https://sabr.org/lahman-database/) rather than retrying.
+
 ## Player ID Lookup
 
 `fungo.lookup` provides player ID cross-reference helpers backed by the Chadwick Bureau register. The register is fetched on demand and cached under your user cache directory (`$XDG_CACHE_HOME` or `~/.cache`, then `fungo/chadwick_people.csv`).
@@ -525,8 +572,11 @@ lookup.mlbam_to_fangraphs(545361)
 lookup.mlbam_to_bbref(545361)
 lookup.fangraphs_to_mlbam(15640)
 lookup.bbref_to_mlbam("troutmi01")
+lookup.xref_ids(545361)              # MLB Stats API cross-reference map
 lookup.refresh()
 ```
+
+The register updates monthly in-season, and its FanGraphs IDs lag roughly a full season for recent debutants. `mlbam_to_fangraphs` and `mlbam_to_bbref` therefore fall back to a single MLB Stats API `xrefId` call when the register value is blank or missing — that source carries FanGraphs IDs within days of a debut. Pass `live_fallback=False` for fully offline lookups. A cached register older than 35 days triggers a `StaleCacheWarning` recommending `refresh()`.
 
 ## DataFrames
 
@@ -542,7 +592,7 @@ df = pl.DataFrame(rows)   # or: pd.DataFrame(rows)
 
 ## Command Line
 
-The `fungo` console script exposes six subcommands. `--format` defaults to `csv` for `lookup`, `search`, and `leaderboard`, and `json` for `mlb`, `fangraphs`, and `bbref`. `-o/--output` writes to a file instead of stdout.
+The `fungo` console script exposes eight subcommands. `--format` defaults to `json` for `mlb`, `fangraphs`, and `bbref`, and `csv` for everything else. `-o/--output` writes to a file instead of stdout.
 
 ```bash
 # Player ID lookup
@@ -567,9 +617,17 @@ fungo fangraphs --list
 # Baseball-Reference (rate-limited)
 fungo bbref get_player --bbref-id=troutmi01
 fungo bbref --list
+
+# Retrosheet
+fungo retrosheet get_game_logs --year=2024
+fungo retrosheet --list
+
+# Lahman database
+fungo lahman get_table --name=Batting
+fungo lahman --list
 ```
 
-`search`, `leaderboard`, `mlb`, `fangraphs`, and `bbref` accept arbitrary `--field=value` passthrough arguments. Only `search` pipe-joins comma-separated values for Baseball Savant filters.
+`search`, `leaderboard`, `mlb`, `fangraphs`, `bbref`, `retrosheet`, and `lahman` accept arbitrary `--field=value` passthrough arguments. Only `search` pipe-joins comma-separated values for Baseball Savant filters.
 
 ## Changelog
 

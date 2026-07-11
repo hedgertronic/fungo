@@ -4,10 +4,35 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0] - 2026-07-07
+## [2.0.0] - 2026-07-11
 
 ### Added
 
+- `fungo.retrosheet`: Retrosheet downloads — parsed play-by-play (1903+), game
+  logs (1871+, keyed by `GAME_LOG_FIELDS`), schedules (1877+), the biofile
+  (plus coaches/relatives), and the per-season gameinfo/batting/pitching/
+  fielding/teamstats/allplayers tables. Datasets cache under
+  `~/.cache/fungo/retrosheet/`; `refresh(dataset, year)` re-downloads. The
+  required Retrosheet attribution notice ships in the module docstring and
+  README.
+- `fungo.lahman`: SABR-hosted Lahman Database tables (27 CSVs, 1871 through
+  the latest annual release). Box shared links are discovered at runtime from
+  `sabr.org/lahman-database`; structural changes raise the new `LahmanError`
+  naming the recovery step (`refresh()` for a stale cached index, otherwise
+  re-verification against the SABR page). Tables cache under
+  `~/.cache/fungo/lahman/`.
+- `fungo.lookup`: `xref_ids(mlbam)` and an MLB Stats API `xrefId` fallback in
+  `mlbam_to_fangraphs` / `mlbam_to_bbref` (register-first; `live_fallback=False`
+  disables) — covers recent debutants whose FanGraphs IDs the Chadwick
+  register lacks. A register cache older than 35 days warns with the new
+  `StaleCacheWarning`.
+- `fungo.mlb.get_hydrations(path)`: per-endpoint hydration discovery via the
+  Stats API's self-documenting `hydrate=hydrations` value.
+- Reference docs: `docs/savant-search-params.md` (the complete Statcast search
+  input-param vocabulary and serialization rules) and `docs/mlb-hydrations.md`
+  (hydrate grammar and discovery).
+- CLI: `fungo retrosheet` and `fungo lahman` subcommands (function passthrough
+  with `--list`, like `mlb`/`fangraphs`/`bbref`; CSV output by default).
 - `fungo.bbref`: opt-in local response cache (`enable_cache`, `disable_cache`,
   `clear_cache`). A cache hit skips the rate limiter entirely. Historical pages
   are immutable and need no TTL; current-season pages (standings, daily
@@ -43,6 +68,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   minor-league register pages (keyed by Chadwick `key_bbref_minors` ids).
 - `fangraphs` and `bbref` CLI subcommands (function passthrough, `--list`).
 - `FangraphsError` and `BBRefError` exception types.
+
+### Changed
+
+- Behavior flags are keyword-only across the public API: `lookup()`'s
+  `mlb_only` / `force_refresh` and `add_spin_columns()`'s `inplace` (both
+  positional in 1.0), matching the new modules' `force_refresh` /
+  `live_fallback` flags. Boolean *data* parameters that mirror upstream query
+  params (e.g. `mlb.search_players(active=...)`) are unchanged.
 
 ### Removed
 

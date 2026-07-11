@@ -1,8 +1,9 @@
 """``fungo`` command-line interface.
 
-A single ``fungo`` entry point with six subcommands — ``lookup``, ``search``,
-``leaderboard``, ``mlb``, ``fangraphs``, and ``bbref`` — that parse arguments
-and delegate straight to the library, then render the result as CSV or JSON.
+A single ``fungo`` entry point with eight subcommands — ``lookup``, ``search``,
+``leaderboard``, ``mlb``, ``fangraphs``, ``bbref``, ``retrosheet``, and
+``lahman`` — that parse arguments and delegate straight to the library, then
+render the result as CSV or JSON.
 The CLI holds no business logic: each subcommand maps flags onto an existing
 public function and prints what comes back.
 
@@ -23,7 +24,7 @@ import json
 import sys
 from typing import Any
 
-from fungo import bbref, fangraphs, mlb
+from fungo import bbref, fangraphs, lahman, mlb, retrosheet
 from fungo.exceptions import FungoError
 from fungo.lookup import lookup
 from fungo.statcast.leaderboards import get_leaderboard, list_leaderboards
@@ -219,13 +220,21 @@ def _run_bbref(args: argparse.Namespace, extras: list[str]) -> Any:
     return _run_module_function(bbref, "bbref", args, extras)
 
 
+def _run_retrosheet(args: argparse.Namespace, extras: list[str]) -> Any:
+    return _run_module_function(retrosheet, "retrosheet", args, extras)
+
+
+def _run_lahman(args: argparse.Namespace, extras: list[str]) -> Any:
+    return _run_module_function(lahman, "lahman", args, extras)
+
+
 #####################################################################
 # Parser construction
 #####################################################################
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    """Build the top-level ``fungo`` parser with its four subcommands."""
+    """Build the top-level ``fungo`` parser with its eight subcommands."""
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument(
         "-o", "--output", help="Write output to FILE (default: stdout)."
@@ -234,7 +243,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--format",
         choices=["csv", "json"],
         default=None,
-        help="Output format (default: csv; json for the mlb subcommand).",
+        help="Output format (default: csv; json for mlb, fangraphs, and bbref).",
     )
 
     parser = argparse.ArgumentParser(
@@ -302,6 +311,22 @@ def _build_parser() -> argparse.ArgumentParser:
     p_br.add_argument("function", nargs="?", help="A bbref function name.")
     p_br.add_argument("--list", action="store_true", help="List available functions.")
 
+    p_rs = sub.add_parser(
+        "retrosheet",
+        parents=[common],
+        help="Retrosheet downloads (game logs, plays, schedules, biofile).",
+    )
+    p_rs.add_argument("function", nargs="?", help="A retrosheet function name.")
+    p_rs.add_argument("--list", action="store_true", help="List available functions.")
+
+    p_lm = sub.add_parser(
+        "lahman",
+        parents=[common],
+        help="Lahman database tables (SABR-hosted CSVs).",
+    )
+    p_lm.add_argument("function", nargs="?", help="A lahman function name.")
+    p_lm.add_argument("--list", action="store_true", help="List available functions.")
+
     return parser
 
 
@@ -312,6 +337,8 @@ _HANDLERS = {
     "mlb": _run_mlb,
     "fangraphs": _run_fangraphs,
     "bbref": _run_bbref,
+    "retrosheet": _run_retrosheet,
+    "lahman": _run_lahman,
 }
 
 

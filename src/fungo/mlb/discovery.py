@@ -10,7 +10,80 @@ from __future__ import annotations
 
 from typing import Any
 
+from fungo.exceptions import MLBStatsError
 from fungo.mlb.stats_api import mlb_api
+
+#####################################################################
+# Hydration discovery
+#####################################################################
+
+
+def get_hydrations(path: str, params: dict[str, Any] | None = None) -> list[str]:
+    """Discover the valid hydration names for a hydrate-capable endpoint.
+
+    Passing ``hydrate=hydrations`` to a hydrate-capable endpoint makes the API
+    return its valid hydration names (the official docs are login-gated, so
+    this self-documenting behavior is the practical way to enumerate them).
+    ``fields=hydrations`` is added to strip the rest of the payload.
+
+    Placement of the ``hydrations`` array is inconsistent across endpoints:
+    ``/api/v1/people/{id}`` returns it both at the response top level and
+    inside each person object, while ``/api/v1/teams/{id}`` returns it only
+    inside each team object. This function normalizes both placements. On
+    nested-placement endpoints ``fields=hydrations`` strips the whole payload
+    (the ``fields`` filter needs the section name too), so an empty first
+    response triggers one retry without ``fields``. There is no
+    ``/hydrations`` path form (``/api/v1/teams/hydrations`` is a 400), and
+    unknown hydration names passed to ``hydrate=`` are silently ignored.
+
+    Args:
+        path: API path beginning with ``/api/v1`` or ``/api/v1.1``, e.g.
+            ``"/api/v1/people/545361"`` or ``"/api/v1/teams/119"``.
+        params: Optional extra query parameters the endpoint requires (e.g.
+            ``{"sportId": 1}``). ``hydrate`` and ``fields`` are overridden.
+
+    Returns:
+        The endpoint's valid hydration names.
+
+    Raises:
+        MLBStatsError: If the response carries no ``hydrations`` list (the
+            endpoint does not support hydration discovery).
+        RequestError: On a 4xx status or after exhausting transport retries.
+    """
+    merged: dict[str, Any] = dict(params or {})
+    merged["hydrate"] = "hydrations"
+    merged.pop("fields", None)
+
+    found = _scan_hydrations(mlb_api(path, {**merged, "fields": "hydrations"}))
+    if found is None:
+        # Nested placement: fields=hydrations stripped everything; retry once
+        # with the full payload.
+        found = _scan_hydrations(mlb_api(path, merged))
+    if found is None:
+        raise MLBStatsError(f"No hydrations list found in response from {path}")
+    return found
+
+
+def _scan_hydrations(data: dict[str, Any]) -> list[str] | None:
+    """Find a ``hydrations`` list in a payload, top-level or nested.
+
+    Args:
+        data: A raw JSON response payload.
+
+    Returns:
+        The first ``hydrations`` list found (top level preferred, then the
+        first element of any list-valued section carrying one), or ``None``.
+    """
+    top = data.get("hydrations")
+    if isinstance(top, list):
+        return [str(name) for name in top]
+    for section in data.values():
+        if isinstance(section, list):
+            for item in section:
+                if isinstance(item, dict) and isinstance(item.get("hydrations"), list):
+                    return [str(name) for name in item["hydrations"]]
+    return None
+
 
 #####################################################################
 # Discovery endpoints

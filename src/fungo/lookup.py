@@ -8,6 +8,10 @@ The ~6 MB register is fetched on demand via :func:`fungo.http.request_bytes`
 and cached under the stdlib user cache dir
 (``$XDG_CACHE_HOME``/``~/.cache`` -> ``fungo/chadwick_people.csv``). Call
 :func:`refresh` or pass ``force_refresh=True`` to update it.
+
+The register's rookie lag is column-specific (``key_fangraphs`` stays blank
+for ~a season after debut), so the ``mlbam_to_*`` converters fall back to the
+MLB Stats API's xrefIds (:func:`xref_ids`) when the register has no value.
 """
 
 from __future__ import annotations
@@ -15,16 +19,24 @@ from __future__ import annotations
 import csv
 import os
 import time
+import warnings
 from pathlib import Path
 from typing import Any
 
 from fungo import http
+from fungo.exceptions import StaleCacheWarning
 
 CHADWICK_SHARD_URL = "https://raw.githubusercontent.com/chadwickbureau/register/master/data/people-{}.csv"
 CHADWICK_SHARDS = "0123456789abcdef"
 
+STATSAPI_PERSON_URL = "https://statsapi.mlb.com/api/v1/people/{}"
+
 CACHE_DIR = Path(os.environ.get("XDG_CACHE_HOME") or "~/.cache").expanduser() / "fungo"
 CACHE_FILE = CACHE_DIR / "chadwick_people.csv"
+
+# The register updates monthly in-season; a cache older than one update cycle
+# (plus slack) is worth flagging.
+STALE_AFTER_DAYS = 35
 
 # In-memory cache — populated on first lookup.
 _ROWS: list[dict[str, Any]] | None = None
@@ -74,6 +86,14 @@ def refresh() -> Path:
 def _load(force_refresh: bool = False) -> list[dict[str, Any]]:
     """Load the register into memory, downloading/refreshing the cache if needed.
 
+    When the on-disk cache is older than ``STALE_AFTER_DAYS`` days, a
+    :class:`~fungo.exceptions.StaleCacheWarning` recommends
+    :func:`fungo.lookup.refresh` — the register updates monthly in-season.
+    The warning fires only when the disk cache is read into the cold
+    in-memory cache (at most once per process); it never auto-refreshes,
+    because a surprise ~6 MB download inside a lookup call is worse than a
+    warning.
+
     Args:
         force_refresh: Re-download before loading.
 
@@ -85,6 +105,14 @@ def _load(force_refresh: bool = False) -> list[dict[str, Any]]:
         return _ROWS
     if force_refresh or not CACHE_FILE.exists():
         refresh()
+    elif time.time() - CACHE_FILE.stat().st_mtime > STALE_AFTER_DAYS * 86400:
+        warnings.warn(
+            f"The cached Chadwick register at {CACHE_FILE} is more than "
+            f"{STALE_AFTER_DAYS} days old; the register updates monthly "
+            "in-season. Call fungo.lookup.refresh() to re-download it.",
+            StaleCacheWarning,
+            stacklevel=3,
+        )
     with open(CACHE_FILE, encoding="utf-8") as f:
         _ROWS = list(csv.DictReader(f))
     return _ROWS
@@ -102,6 +130,7 @@ def lookup(
     bbref: str | None = None,
     bbref_minors: str | None = None,
     retro: str | None = None,
+    *,
     mlb_only: bool = True,
     force_refresh: bool = False,
 ) -> list[dict[str, Any]]:
@@ -150,24 +179,108 @@ def lookup(
 
 
 #####################################################################
+# MLB Stats API xref IDs
+#####################################################################
+
+
+def xref_ids(mlbam: int | str) -> dict[str, str]:
+    """Fetch cross-reference IDs for a player from the MLB Stats API.
+
+    Queries ``statsapi.mlb.com/api/v1/people/{mlbam}?hydrate=xrefId`` and
+    returns the ``xrefIds`` list as an ``xrefType -> xrefId`` mapping. Types
+    include ``fangraphs``, ``retrosheet``, and ``lahman`` (the ``lahman``
+    value is the Baseball-Reference ID for modern players). The MLB Stats API
+    carries FanGraphs IDs within days of a player's debut, far ahead of the
+    Chadwick register's ~season-long ``key_fangraphs`` lag — this is the
+    live-fallback source behind :func:`mlbam_to_fangraphs` and
+    :func:`mlbam_to_bbref`.
+
+    Args:
+        mlbam: MLBAM (Savant) player ID.
+
+    Returns:
+        Mapping of ``xrefType`` to ``xrefId``; empty when the API has none.
+
+    Raises:
+        RequestError: On transport failure.
+    """
+    data = http.request_json(
+        STATSAPI_PERSON_URL.format(mlbam), params={"hydrate": "xrefId"}
+    )
+    if not isinstance(data, dict):
+        return {}
+    people = data.get("people") or []
+    if not people:
+        return {}
+    xrefs = people[0].get("xrefIds") or []
+    return {
+        str(x["xrefType"]): str(x["xrefId"])
+        for x in xrefs
+        if x.get("xrefType") and x.get("xrefId")
+    }
+
+
+#####################################################################
 # ID converters
 #####################################################################
 
 
-def mlbam_to_fangraphs(mlbam: int | str) -> str | None:
-    """Convert an MLBAM ID to a FanGraphs ID, or ``None`` if not found."""
+def mlbam_to_fangraphs(mlbam: int | str, *, live_fallback: bool = True) -> str | None:
+    """Convert an MLBAM ID to a FanGraphs ID, or ``None`` if not found.
+
+    The Chadwick register is consulted first. Its ``key_fangraphs`` column
+    lags roughly a full season for current-season debutants, while the MLB
+    Stats API's xrefIds carry the FanGraphs ID within days of debut — so when
+    the register row is missing or its FanGraphs key is blank, a single
+    :func:`xref_ids` call fills the gap (the ``fangraphs`` xref type).
+
+    Args:
+        mlbam: MLBAM (Savant) player ID.
+        live_fallback: When True, fall back to the MLB Stats API xrefIds if
+            the register has no value. False keeps the lookup fully offline.
+
+    Returns:
+        The FanGraphs ID, or ``None`` if neither source has one.
+
+    Raises:
+        RequestError: If the live fallback call fails.
+    """
     matches = lookup(mlbam=mlbam, mlb_only=False)
-    if not matches:
-        return None
-    return matches[0].get("key_fangraphs") or None
+    value = matches[0].get("key_fangraphs") if matches else None
+    if value:
+        return str(value)
+    if live_fallback:
+        return xref_ids(mlbam).get("fangraphs")
+    return None
 
 
-def mlbam_to_bbref(mlbam: int | str) -> str | None:
-    """Convert an MLBAM ID to a Baseball-Reference ID, or ``None`` if not found."""
+def mlbam_to_bbref(mlbam: int | str, *, live_fallback: bool = True) -> str | None:
+    """Convert an MLBAM ID to a Baseball-Reference ID, or ``None`` if not found.
+
+    The Chadwick register is consulted first. Its ``key_bbref`` column lands
+    within about one monthly update of a player's debut, but rows for the
+    newest debutants can still be missing or blank — so when they are, a
+    single :func:`xref_ids` call fills the gap (the ``lahman`` xref type,
+    which is the Baseball-Reference ID for modern players).
+
+    Args:
+        mlbam: MLBAM (Savant) player ID.
+        live_fallback: When True, fall back to the MLB Stats API xrefIds if
+            the register has no value. False keeps the lookup fully offline.
+
+    Returns:
+        The Baseball-Reference ID, or ``None`` if neither source has one.
+
+    Raises:
+        RequestError: If the live fallback call fails.
+    """
     matches = lookup(mlbam=mlbam, mlb_only=False)
-    if not matches:
-        return None
-    return matches[0].get("key_bbref") or None
+    value = matches[0].get("key_bbref") if matches else None
+    if value:
+        return str(value)
+    if live_fallback:
+        return xref_ids(mlbam).get("lahman")
+    return None
 
 
 def fangraphs_to_mlbam(fangraphs: int | str) -> str | None:

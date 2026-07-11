@@ -1,5 +1,6 @@
 """fungo — tools for acquiring baseball data from Statcast, the MLB Stats API,
-FanGraphs, Baseball-Reference, and the Chadwick player-ID register.
+FanGraphs, Baseball-Reference, Retrosheet, the Lahman database, and the
+Chadwick player-ID register.
 
 The core returns raw ``list[dict]`` / ``dict`` — no DataFrame dependency.
 Wrap results in whatever frame library you use: ``pl.DataFrame(rows)`` or
@@ -10,14 +11,16 @@ from __future__ import annotations
 
 from importlib.metadata import PackageNotFoundError, version
 
-from fungo import bbref, constants, fangraphs, lookup, mlb, statcast
+from fungo import bbref, constants, fangraphs, lahman, lookup, mlb, retrosheet, statcast
 from fungo.exceptions import (
     BBRefError,
     FangraphsError,
     FungoError,
+    LahmanError,
     MLBStatsError,
     RequestError,
     SavantError,
+    StaleCacheWarning,
     ValidationError,
 )
 
@@ -35,15 +38,19 @@ __all__ = [
     "BBRefError",
     "FangraphsError",
     "FungoError",
+    "LahmanError",
     "MLBStatsError",
     "RequestError",
     "SavantError",
+    "StaleCacheWarning",
     "ValidationError",
     "__version__",
     "bbref",
     "constants",
     "fangraphs",
+    "lahman",
     "lookup",
     "mlb",
+    "retrosheet",
     "statcast",
 ]

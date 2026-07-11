@@ -974,8 +974,89 @@ def test_discovery_endpoints(
 
 
 #####################################################################
-# Live smoke test (deselected by default)
+# get_hydrations
 #####################################################################
+
+
+def test_get_hydrations_top_level(monkeypatch: pytest.MonkeyPatch) -> None:
+    # /api/v1/people/{id} places the array at the response top level (and
+    # again inside each person object); the top-level copy wins.
+    payload = {
+        "hydrations": ["currentTeam", "team", "stats"],
+        "people": [{"id": 545361, "hydrations": ["currentTeam", "team", "stats"]}],
+    }
+    monkeypatch.setattr(http, "request_json", lambda *a, **k: payload)
+    assert discovery.get_hydrations("/api/v1/people/545361") == [
+        "currentTeam",
+        "team",
+        "stats",
+    ]
+
+
+def test_get_hydrations_nested_retries_without_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # /api/v1/teams/{id} places the array only inside each team object, and
+    # fields=hydrations strips the whole payload there — the empty first
+    # response triggers one retry without fields.
+    calls: list[dict | None] = []
+
+    def fake_request_json(
+        url: str, params: dict[str, Any] | None = None, **_kw: Any
+    ) -> dict:
+        calls.append(params)
+        if params is not None and "fields" in params:
+            return {}
+        return {"teams": [{"id": 119, "hydrations": ["venue", "league"]}]}
+
+    monkeypatch.setattr(http, "request_json", fake_request_json)
+    assert discovery.get_hydrations("/api/v1/teams/119") == ["venue", "league"]
+    assert len(calls) == 2
+    assert calls[0] is not None and calls[0]["fields"] == "hydrations"
+    assert calls[1] is not None and "fields" not in calls[1]
+    assert calls[1]["hydrate"] == "hydrations"
+
+
+def test_get_hydrations_params_merge(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[str, dict | None]] = []
+
+    def fake_request_json(
+        url: str, params: dict[str, Any] | None = None, **_kw: Any
+    ) -> dict:
+        calls.append((url, params))
+        return {"hydrations": ["venue"]}
+
+    monkeypatch.setattr(http, "request_json", fake_request_json)
+    user_params = {"sportId": 1, "hydrate": "ignored"}
+    discovery.get_hydrations("/api/v1/teams/119", user_params)
+    url, params = calls[0]
+    assert url.endswith("/api/v1/teams/119")
+    assert params is not None
+    # User params are preserved; hydrate/fields are forced to "hydrations".
+    assert params["sportId"] == 1
+    assert params["hydrate"] == "hydrations"
+    assert params["fields"] == "hydrations"
+    # The caller's dict is not mutated.
+    assert user_params == {"sportId": 1, "hydrate": "ignored"}
+
+
+def test_get_hydrations_missing_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    # No hydrations list anywhere in the payload names the path in the error.
+    monkeypatch.setattr(
+        http, "request_json", lambda *a, **k: {"copyright": "x", "people": [{}]}
+    )
+    with pytest.raises(MLBStatsError, match="/api/v1/people/545361"):
+        discovery.get_hydrations("/api/v1/people/545361")
+
+
+#####################################################################
+# Live smoke tests (deselected by default)
+#####################################################################
+
+
+@pytest.mark.live
+def test_live_get_hydrations_smoke() -> None:
+    assert "currentTeam" in discovery.get_hydrations("/api/v1/people/545361")
 
 
 @pytest.mark.live

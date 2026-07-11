@@ -346,7 +346,7 @@ def compute_row(row: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def add_spin_columns(
-    rows: list[dict[str, Any]], inplace: bool = False
+    rows: list[dict[str, Any]], *, inplace: bool = False
 ) -> list[dict[str, Any]]:
     """Add Nathan (2021) derived physics columns to each row.
 

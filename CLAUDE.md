@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`fungo` acquires baseball data from public web sources: Baseball Savant (Statcast pitch-level search + ~42 leaderboards), the MLB Stats API (`statsapi.mlb.com`), FanGraphs (leaderboards, player stats, RosterResource, Guts!, THE BOARD), Baseball-Reference (rate-limited single-page fetchers + WAR flat files), and the Chadwick Bureau player-ID register.
+`fungo` acquires baseball data from public web sources: Baseball Savant (Statcast pitch-level search + ~42 leaderboards), the MLB Stats API (`statsapi.mlb.com`), FanGraphs (leaderboards, player stats, RosterResource, Guts!, THE BOARD), Baseball-Reference (rate-limited single-page fetchers + WAR flat files), Retrosheet (parsed play-by-play, game logs, schedules, biofile), the SABR-hosted Lahman Database, and the Chadwick Bureau player-ID register.
 
 Runtime dependencies are exactly **`beautifulsoup4` + `curl_cffi`** (both first-class, both existing solely for Baseball-Reference — table parsing and Cloudflare TLS impersonation respectively); every other source is stdlib-only. It returns **raw data**, not DataFrames:
 
@@ -25,7 +25,7 @@ unless `progress=True` is passed.
 
 ### CLI
 
-A single console script, `fungo`, with six subcommands (registered via `[project.scripts]` in `pyproject.toml`). `cli.py` has no `__main__` guard and there is no `__main__.py`, so **`python -m fungo` does not work** — invoke the installed `fungo` script.
+A single console script, `fungo`, with eight subcommands (registered via `[project.scripts]` in `pyproject.toml`). `cli.py` has no `__main__` guard and there is no `__main__.py`, so **`python -m fungo` does not work** — invoke the installed `fungo` script.
 
 ```
 fungo lookup [--name NAME | --mlbam ID] [--no-mlb-only] [-o OUT] [--format {csv,json}]
@@ -34,11 +34,13 @@ fungo leaderboard SLUG [--season YEARS] [--type T] [--player-id ID] [--<field>=v
 fungo mlb FUNCTION [--<field>=val ...]         |   fungo mlb --list
 fungo fangraphs FUNCTION [--<field>=val ...]   |   fungo fangraphs --list
 fungo bbref FUNCTION [--<field>=val ...]       |   fungo bbref --list
+fungo retrosheet FUNCTION [--<field>=val ...]  |   fungo retrosheet --list
+fungo lahman FUNCTION [--<field>=val ...]      |   fungo lahman --list
 ```
 
-- `--format` defaults to `csv` for `lookup`/`search`/`leaderboard` and `json` for `mlb`/`fangraphs`/`bbref`. CSV rendering requires a `list[dict]`; non-tabular results error and ask for `--format json`.
-- `search` and the function-passthrough subcommands accept arbitrary `--field=value` (or `--field value`) via `parse_known_args` → `_parse_extras`. **Only `search`** pipe-joins comma-separated values (`--pitch-type=FF,SL` → `FF|SL`, Savant's convention); the others pass values verbatim.
-- `mlb`/`fangraphs`/`bbref` share one handler (`_run_module_function`) that dispatches `FUNCTION` onto the module's `__all__` (non-callables are excluded from `--list` and dispatch).
+- `--format` defaults to `json` for `mlb`/`fangraphs`/`bbref` and `csv` for everything else. CSV rendering requires a `list[dict]`; non-tabular results error and ask for `--format json`.
+- `search` and the function-passthrough subcommands accept arbitrary `--field=value` (or `--field value`) via `parse_known_args` → `_parse_extras`. **Only `search`** pipe-joins comma-separated values (`--pitch-type=FF,SL` → `FF|SL`, Savant's convention); the others pass values verbatim (retrosheet coerces string years to `int` internally, so `--year=2024` works).
+- `mlb`/`fangraphs`/`bbref`/`retrosheet`/`lahman` share one handler (`_run_module_function`) that dispatches `FUNCTION` onto the module's `__all__` (non-callables are excluded from `--list` and dispatch).
 - `--season 2023,2024` parses as a `list[int]`, valid only for the
   bat-tracking season-array / camelCase boards (see below). Passing a
   multi-year value to any other (`int`-format) board raises `ValidationError` —
@@ -51,9 +53,9 @@ Two layers: a **stdlib generic engine** and a **source-specific specialization**
 ### Generic engine
 
 - `http.py` — stdlib transport. `request_bytes` (urlencode with `safe="|"` so pipe-delimited params survive, `doseq=True` so list values become repeated keys, drops `None` values, exponential-backoff retry on 5xx/network, raises `RequestError` on 4xx or exhausted retries). `request_json` = `request_bytes` + JSON decode. `parse_csv` (BOM-aware via `utf-8-sig`, preserves empty strings). `map_concurrent` (bounded `ThreadPoolExecutor`, preserves input order, optional inter-submit `delay`, opt-in silent `rich` progress). Uses PEP-695 generics.
-- `exceptions.py` — `FungoError` base; `RequestError`, `SavantError`, `MLBStatsError`, and `ValidationError(value, field_name, valid_values=None)` (also a `ValueError`; emits a `difflib` "did you mean?" suggestion). Reuse these — don't raise bare `ValueError`.
+- `exceptions.py` — `FungoError` base; `RequestError`, `SavantError`, `MLBStatsError`, `FangraphsError`, `BBRefError`, `LahmanError`, `ValidationError(value, field_name, valid_values=None)` (also a `ValueError`; emits a `difflib` "did you mean?" suggestion), and `StaleCacheWarning`. Reuse these — don't raise bare `ValueError`.
 - `constants.py` — `PITCH_TYPES`, `TEAMS` (enriched club metadata), and resolvers `resolve_team` / `resolve_pitch_type` / `resolve_hand` (raise `ValidationError` on a miss).
-- `lookup.py` — Chadwick register cross-reference (MLBAM ↔ FanGraphs ↔ Baseball-Reference ↔ Retrosheet). Downloads the ~6 MB register (16 shards) on first use and caches it under the stdlib user cache dir (`$XDG_CACHE_HOME` or `~/.cache` → `fungo/chadwick_people.csv`). `lookup(...)`, `refresh()`, and `mlbam_to_*` / `*_to_mlbam` converters — the id bridge into both `fangraphs/` (`mlbam_to_fangraphs`) and `bbref/` (`mlbam_to_bbref`).
+- `lookup.py` — Chadwick register cross-reference (MLBAM ↔ FanGraphs ↔ Baseball-Reference ↔ Retrosheet). Downloads the ~6 MB register (16 shards) on first use and caches it under the stdlib user cache dir (`$XDG_CACHE_HOME` or `~/.cache` → `fungo/chadwick_people.csv`); a cache older than `STALE_AFTER_DAYS` (35) warns `StaleCacheWarning` on the cold disk load (the register updates monthly in-season, dormant offseason). `lookup(...)`, `refresh()`, `xref_ids(mlbam)`, and `mlbam_to_*` / `*_to_mlbam` converters — the id bridge into both `fangraphs/` (`mlbam_to_fangraphs`) and `bbref/` (`mlbam_to_bbref`). The `mlbam_to_*` converters are register-first with a single Stats API `xrefId` fallback call when the register value is blank/missing (`live_fallback=False` disables) — the register's `key_fangraphs` lags ~a season for debutants while xrefId carries it within days.
 
 ### Statcast specialization (`statcast/`)
 
@@ -63,7 +65,7 @@ Two layers: a **stdlib generic engine** and a **source-specific specialization**
 
 ### MLB Stats API (`mlb/`)
 
-A pure pass-through port (~90 functions across `stats_api`, `people`, `teams`, `games`, `stats`, `misc`, `discovery`, `constants`). Every function returns the raw JSON `dict`/`list`. `mlb_api(path, params)` is the low-level escape hatch; the typed functions (`get_person`, `get_schedule`, `get_roster`, `get_stats`, …) wrap specific endpoints. `mlb.__all__` lists every public function (the CLI's `fungo mlb --list` reads it).
+A pure pass-through port (~90 functions across `stats_api`, `people`, `teams`, `games`, `stats`, `misc`, `discovery`, `constants`). Every function returns the raw JSON `dict`/`list`. `mlb_api(path, params)` is the low-level escape hatch; the typed functions (`get_person`, `get_schedule`, `get_roster`, `get_stats`, …) wrap specific endpoints. `mlb.__all__` lists every public function (the CLI's `fungo mlb --list` reads it). `discovery.get_hydrations(path)` returns the hydration names an endpoint accepts via the API's self-documenting `hydrate=hydrations` value, normalizing the placement inconsistency (top-level on `/people`, per-object on `/teams`) and retrying once without `fields=` on nested-placement endpoints; the hydrate grammar is documented in `docs/mlb-hydrations.md`.
 
 ### FanGraphs (`fangraphs/`)
 
@@ -72,6 +74,18 @@ JSON pass-through like `mlb/`, stdlib-only. `api.py` is the fragile seam: every 
 ### Baseball-Reference (`bbref/`)
 
 The **inverse of fungo's usual throughput posture**: polite single-page fetchers, never bulk. `session.py` routes every request through a process-wide `_RateLimiter` (6.5s spacing ≈ 9 req/min — under both Sports Reference's published 20/min and the community-tested 10/min block threshold) and maps 403/429 → `BBRefError` with do-not-retry jail guidance; transport is `curl_cffi` `impersonate="chrome"` (B-R Cloudflare-fingerprint-blocked plain clients for months in 2025). `tables.py` strips HTML-comment markers then parses once with `beautifulsoup4` (B-R defers secondary tables inside `<!-- -->`; the live/commented split shifts per page since their 2024 table upgrade), keying cells by the stable `data-stat` attributes; duplicate table ids (the standings page ships `standings_E` twice — AL then NL) get positional suffixes (`standings_E_2`) instead of overwriting. `players.py`/`teams.py` return **all tables from one page fetch** (`get_player`, `get_game_log`, `get_splits`, `get_team_schedule`). `leagues.py` adds standings (pre-1969 = only `expanded_standings_overall`) and the amateur draft (`query_type=franch_year` wants historical franchise codes: ANA/FLA/TBD). `boxes.py` adds box scores (Retrosheet-style home codes — `BOX_SCORE_TEAM_CODES` maps the 12 that differ from franchise codes; team table ids embed the season's club name, so enumerate them from the result, never hard-code; the id-less linescore is returned under `"linescore"`) and `get_daily` (scoreboard links + the 16 `standings-{upto|after}-*` tables). `register.py` fetches MiLB register pages — ids are Chadwick `key_bbref_minors` verbatim; never synthesize them from names. `war.py` fetches the `war_daily_{bat,pitch}.txt` CSV flat files (bWAR, no HTML). `cache.py` is an opt-in local response cache (off by default; activated via `enable_cache`): checked inside `bbref_bytes` *before* `_limiter.wait()` so a cache hit costs no rate-limit budget, and written only after a successful fetch so errors are never cached. **Never add `map_concurrent` fan-out here.**
+
+### Retrosheet (`retrosheet/`)
+
+Static-file downloads, stdlib-only (`zipfile` + `http.py`) — the opposite posture from `bbref/`: no rate limits, generous license (one required attribution notice, shipped verbatim in the module docstring and README). `files.py` downloads each dataset zip once into `fungo/retrosheet/<dataset>/` under the user cache dir and re-parses from disk per call (`refresh(dataset, year)` / `clear_cache()`). `fields.py` carries `GAME_LOG_FIELDS` (161 names from Retrosheet's `glfields.txt` — game logs are headerless) and `SCHEDULE_FIELDS` (the schedule header has colliding names, so it's dropped and rows keyed positionally; header detection = first field is a yyyymmdd digit string). The six per-season accessors (`get_gameinfo`/`get_batting`/`get_pitching`/`get_fielding`/`get_teamstats`/`get_allplayers`) share one `{year}csvs.zip` download; `get_biofile`/`get_coaches`/`get_relatives` share `biofile.zip`. Year params accept `int | str` (coerced; the CLI passes strings) and validate coverage floors (game logs 1871, schedules 1877, plays/bundles 1903) before any I/O. The schedule URL suffix is lowercase `.zip` — uppercase 404s.
+
+### Lahman (`lahman/`)
+
+SABR is the canonical host (annual releases, CC BY-SA 3.0); `chadwickbureau/baseballdatabank` is deleted — never target it. `api.py` is a fragile seam in the `fangraphs/api.py` mold: it discovers the Box shared link at runtime from `sabr.org/lahman-database` (anchor text containing "comma" selects the CSV link among SQL/Access/CSV), walks the **paginated** Box folder listing (`?page=N`; page 1 shows only 20 of 27 tables) for `"typedID":"f_{id}"` → filename pairs, and downloads via the `rm=box_download_shared_file` internal route (verified live 2026-07-11; no UA spoofing needed). Every structural failure raises `LahmanError` naming the condition — re-verify against the SABR page, don't retry. `tables.py` caches CSVs under `fungo/lahman/` plus an `_index.json` of the discovered link map; cache hits make zero requests; `refresh()` re-discovers (file ids change per release). `get_table` is case-tolerant with `ValidationError` did-you-mean on a miss.
+
+### Reference docs (`docs/`)
+
+`docs/savant-search-params.md` — the complete Statcast search *input*-param vocabulary (Savant documents only output columns), extracted from the search app's JS bundle; includes the serialization rules (trailing-pipe joins, `\.`-escaped dots, `\.\.not` flag negation) and the regeneration procedure. `docs/mlb-hydrations.md` — the `hydrate=hydrations` discovery mechanism and hydrate grammar. Neither is validated in code by design: the vocabularies drift seasonally, and fungo's posture is raw pass-through.
 
 ## The non-obvious things (the library's hard-won value)
 

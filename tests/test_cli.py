@@ -315,3 +315,41 @@ def test_bbref_dispatch(monkeypatch, capsys):
     monkeypatch.setattr(cli.bbref, "get_player", fake)
     assert cli.main(["bbref", "get_player", "--bbref-id=troutmi01"]) == 0
     assert json.loads(capsys.readouterr().out) == ROWS
+
+
+def test_retrosheet_list(capsys):
+    assert cli.main(["retrosheet", "--list"]) == 0
+    out = capsys.readouterr().out
+    assert "get_game_logs" in out
+    assert "get_plays" in out
+    # Non-callable __all__ entries (the field constants) are excluded.
+    assert "GAME_LOG_FIELDS" not in out
+
+
+def test_lahman_list(capsys):
+    assert cli.main(["lahman", "--list"]) == 0
+    out = capsys.readouterr().out
+    assert "get_table" in out
+    assert "list_tables" in out
+
+
+def test_retrosheet_dispatch_and_csv_default(monkeypatch, capsys):
+    def fake(**kwargs: Any) -> list[dict]:
+        assert kwargs == {"year": "2024"}
+        return ROWS
+
+    monkeypatch.setattr(cli.retrosheet, "get_game_logs", fake)
+    assert cli.main(["retrosheet", "get_game_logs", "--year=2024"]) == 0
+    out = capsys.readouterr().out.strip().splitlines()
+    assert out[0] == "player_id,name,velo"
+
+
+def test_lahman_dispatch_and_csv_default(monkeypatch, capsys):
+    def fake(**kwargs: Any) -> list[dict]:
+        assert kwargs == {"name": "Batting"}
+        return ROWS
+
+    monkeypatch.setattr(cli.lahman, "get_table", fake)
+    assert cli.main(["lahman", "get_table", "--name=Batting"]) == 0
+    out = capsys.readouterr().out.strip().splitlines()
+    assert out[0] == "player_id,name,velo"

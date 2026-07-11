@@ -11,7 +11,11 @@ import tomllib
 from pathlib import Path
 
 import fungo
+import fungo.bbref as bbref
+import fungo.fangraphs as fangraphs
+import fungo.lahman as lahman
 import fungo.mlb as mlb
+import fungo.retrosheet as retrosheet
 import fungo.statcast as statcast
 from fungo.statcast import leaderboards as lb
 
@@ -76,6 +80,26 @@ def test_statcast_exports_exist():
 def test_mlb_exports_exist():
     for name in mlb.__all__:
         assert hasattr(mlb, name), name
+
+
+def test_fangraphs_exports_exist():
+    for name in fangraphs.__all__:
+        assert hasattr(fangraphs, name), name
+
+
+def test_bbref_exports_exist():
+    for name in bbref.__all__:
+        assert hasattr(bbref, name), name
+
+
+def test_retrosheet_exports_exist():
+    for name in retrosheet.__all__:
+        assert hasattr(retrosheet, name), name
+
+
+def test_lahman_exports_exist():
+    for name in lahman.__all__:
+        assert hasattr(lahman, name), name
 
 
 def test_leaderboard_registry_has_wrappers_for_html_boards():
