@@ -373,3 +373,18 @@ def test_non_zip_response_raises_requesterror(monkeypatch, tmp_path):
     monkeypatch.setattr(http, "request_bytes", lambda url, **kw: b"<html>nope</html>")
     with pytest.raises(RequestError, match="not a zip archive"):
         retrosheet.get_biofile()
+
+
+def test_extract_zip_skips_directory_members(monkeypatch, tmp_path):
+    # A zip can carry directory entries ("2024/"); extraction writes only
+    # real file members into the flat cache dir.
+    monkeypatch.setattr(files_mod, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(
+        http,
+        "request_bytes",
+        lambda url, **kw: _zip_bytes({"2024/": "", "gl2024.txt": _game_log_text()}),
+    )
+    rows = retrosheet.get_game_logs(2024)
+    assert rows[0]["date"] == "20240320"
+    extracted = [p.name for p in tmp_path.rglob("*") if p.is_file()]
+    assert extracted == ["gl2024.txt"]

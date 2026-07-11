@@ -42,9 +42,22 @@ BOX_PAGE_1 = (
 )
 BOX_PAGE_2 = (
     '{"pageNumber":2,"pageCount":2,"items":['
-    '{"typedID":"f_555","type":"file","extension":"csv","name":"AllstarFull.csv"}'
+    '{"typedID":"f_555","type":"file","extension":"csv","name":"AllstarFull.csv"},'
+    '{"typedID":"f_666","type":"file","extension":"csv","name":"Batting.csv"},'
+    '{"typedID":"f_777","type":"file","extension":"csv","name":"Pitching.csv"},'
+    '{"typedID":"f_888","type":"file","extension":"csv","name":"Fielding.csv"}'
     "]}"
 )
+
+ALL_TABLES = [
+    "AllstarFull",
+    "Batting",
+    "Fielding",
+    "Parks",
+    "People",
+    "Pitching",
+    "Teams",
+]
 
 PARKS_CSV = (
     b"\xef\xbb\xbfID,parkkey,parkname,city\n"
@@ -99,13 +112,16 @@ def test_fetch_table_index_walks_pages_and_skips_non_csv(mock_lahman):
         "People": "f_222",
         "Teams": "f_444",
         "AllstarFull": "f_555",
+        "Batting": "f_666",
+        "Pitching": "f_777",
+        "Fielding": "f_888",
     }
     # Two folder pages fetched (pageCount=2), readme2025.txt excluded.
     assert mock_lahman["count"] == 2
 
 
 def test_list_tables(mock_lahman):
-    assert tables_mod.list_tables() == ["AllstarFull", "Parks", "People", "Teams"]
+    assert tables_mod.list_tables() == ALL_TABLES
 
 
 #####################################################################
@@ -134,15 +150,18 @@ def test_get_table_case_tolerant(mock_lahman):
 def test_get_table_unknown_raises_validation_error(mock_lahman):
     with pytest.raises(ValidationError) as excinfo:
         tables_mod.get_table("Parkz")
-    assert excinfo.value.valid_values == ["AllstarFull", "Parks", "People", "Teams"]
+    assert excinfo.value.valid_values == ALL_TABLES
     assert "Parks" in str(excinfo.value)  # "did you mean?" suggestion
 
 
 def test_convenience_wrappers_resolve_their_tables(mock_lahman):
-    # Teams is in the fake index; the wrapper resolves and downloads it.
+    # Each wrapper resolves its table from the fake index and downloads it
+    # (the same fake CSV body serves every download).
     assert tables_mod.get_teams() == tables_mod.get_table("Teams")
-    # People resolves too (same fake CSV body serves every download).
-    assert tables_mod.get_people()
+    assert tables_mod.get_people() == tables_mod.get_table("People")
+    assert tables_mod.get_batting() == tables_mod.get_table("Batting")
+    assert tables_mod.get_pitching() == tables_mod.get_table("Pitching")
+    assert tables_mod.get_fielding() == tables_mod.get_table("Fielding")
 
 
 #####################################################################
@@ -178,7 +197,7 @@ def test_corrupt_index_file_triggers_rediscovery(mock_lahman):
 
     tables_mod._INDEX = None
     tables_mod._index_file().write_text("not json", encoding="utf-8")
-    assert tables_mod.list_tables() == ["AllstarFull", "Parks", "People", "Teams"]
+    assert tables_mod.list_tables() == ALL_TABLES
     assert mock_lahman["count"] == after_first * 2
 
 

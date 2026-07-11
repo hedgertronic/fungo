@@ -312,6 +312,13 @@ def test_xref_ids_empty_when_api_has_none(monkeypatch):
     assert lookup_mod.xref_ids("999999") == {}
 
 
+def test_xref_ids_non_dict_payload_returns_empty(monkeypatch):
+    # request_json is typed to return Any; a non-dict payload (an error page
+    # decoded as a JSON list, say) yields {} rather than an AttributeError.
+    monkeypatch.setattr(http, "request_json", lambda *a, **kw: ["unexpected"])
+    assert lookup_mod.xref_ids("999999") == {}
+
+
 def test_fallback_fires_when_register_row_missing(mock_register, mock_xref):
     assert lookup_mod.mlbam_to_fangraphs("999999") == "31234"
     assert lookup_mod.mlbam_to_bbref("999999") == "newbie01"

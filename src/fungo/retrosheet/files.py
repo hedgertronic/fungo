@@ -118,11 +118,11 @@ def _dataset_url(dataset: str, year: int | str | None) -> str:
 
 
 def _extract_zip(url: str, dataset: str) -> list[Path]:
-    """Download a dataset zip and extract every member into the cache dir.
+    """Download a dataset zip and extract every file member into the cache dir.
 
     Members are written under ``CACHE_DIR/<dataset>/`` by basename (member
     names in Retrosheet zips are flat; taking the basename also guards
-    against path traversal).
+    against path traversal). Directory entries are skipped.
 
     Args:
         url: The zip's download URL.
@@ -143,12 +143,12 @@ def _extract_zip(url: str, dataset: str) -> list[Path]:
     target.mkdir(parents=True, exist_ok=True)
     paths: list[Path] = []
     with archive:
-        for member in archive.namelist():
-            name = Path(member).name
-            if not name:
+        for info in archive.infolist():
+            name = Path(info.filename).name
+            if info.is_dir() or not name:
                 continue
             path = target / name
-            path.write_bytes(archive.read(member))
+            path.write_bytes(archive.read(info))
             paths.append(path)
     return paths
 
