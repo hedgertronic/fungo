@@ -353,7 +353,7 @@ def test_bool_extras_coerce_for_bool_annotated_params(monkeypatch):
 
     monkeypatch.setattr(cli.retrosheet, "get_biofile", fake)
     assert cli.main(["retrosheet", "get_biofile", "--force-refresh=false"]) == 0
-    assert seen["force_refresh"] is False  # a real bool, not the truthy "false"
+    assert seen["force_refresh"] is False  # the bool-annotated param gets a bool
     assert cli.main(["retrosheet", "get_biofile", "--force-refresh=true"]) == 0
     assert seen["force_refresh"] is True
 
