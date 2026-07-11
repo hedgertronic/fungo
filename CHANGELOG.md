@@ -36,6 +36,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - CLI: passthrough values for parameters the target function annotates as
   `bool` coerce from `true`/`false`, so `--force-refresh=false` arrives as a
   real `False` instead of a truthy string.
+- CLI: passthrough kwargs are bind-checked against the target function's
+  signature before dispatch, so a mistyped `--field` or a missing required
+  one exits with a one-line usage error instead of a traceback.
 - `fungo.bbref`: opt-in local response cache (`enable_cache`, `disable_cache`,
   `clear_cache`). A cache hit skips the rate limiter entirely. Historical pages
   are immutable and need no TTL; current-season pages (standings, daily

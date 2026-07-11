@@ -223,8 +223,11 @@ def _run_module_function(
 ) -> Any:
     """Shared handler for the function-passthrough subcommands (mlb,
     fangraphs, bbref, retrosheet, lahman): dispatch ``FUNCTION --key=value ...``
-    onto a public function listed in the module's ``__all__``. Values for
-    ``bool``-annotated parameters coerce from ``true``/``false``."""
+    onto a public function listed in the module's ``__all__``. Kwargs are
+    bind-checked against the function's signature before the call, so a
+    mistyped ``--field`` or a missing required one exits with a one-line
+    usage error; values for ``bool``-annotated parameters coerce from
+    ``true``/``false``."""
     if args.list:
         return [
             {"function": name}
@@ -244,6 +247,10 @@ def _run_module_function(
         )
     func = getattr(module, args.function)
     kwargs = _parse_extras(extras, pipe_join=False)
+    try:
+        inspect.signature(func).bind(**kwargs)
+    except TypeError as exc:
+        raise SystemExit(f"fungo {module_name}: {args.function}: {exc}") from None
     _coerce_bool_extras(func, kwargs, module_name)
     return func(**kwargs)
 

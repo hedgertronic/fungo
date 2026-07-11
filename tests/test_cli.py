@@ -367,6 +367,24 @@ def test_bool_extras_invalid_value_errors(monkeypatch):
         cli.main(["retrosheet", "get_biofile", "--force-refresh=maybe"])
 
 
+def test_unknown_extra_arg_errors_cleanly(monkeypatch):
+    # The param is optional so the bind failure is the typo itself (bind
+    # reports a missing required argument before an unexpected one).
+    def fake(*, year: int | str = 2024) -> list[dict]:
+        return ROWS
+
+    monkeypatch.setattr(cli.retrosheet, "get_game_logs", fake)
+    with pytest.raises(SystemExit, match="unexpected keyword argument 'yeear'"):
+        cli.main(["retrosheet", "get_game_logs", "--yeear=2024"])
+
+
+def test_missing_required_arg_errors_cleanly():
+    # Bind-checked against the real lahman.get_table signature; the check
+    # fails before dispatch, so no network is touched.
+    with pytest.raises(SystemExit, match="missing a required argument: 'name'"):
+        cli.main(["lahman", "get_table"])
+
+
 def test_bool_strings_pass_through_for_non_bool_params(monkeypatch, capsys):
     # "true" as a value for a non-bool parameter stays a string.
     def fake(**kwargs: Any) -> list[dict]:
