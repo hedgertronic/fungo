@@ -41,8 +41,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   one exits with a one-line usage error instead of a traceback.
 - `fungo.bbref`: opt-in local response cache (`enable_cache`, `disable_cache`,
   `clear_cache`). A cache hit skips the rate limiter entirely. Historical pages
-  are immutable and need no TTL; current-season pages (standings, daily
-  scoreboards) accept a `ttl=` in seconds. Cache files live under
+  are immutable and need no TTL; `enable_cache(ttl=...)` sets one process-wide
+  expiry in seconds for every cached entry, for processes that also fetch
+  current-season pages (standings, daily scoreboards). Cache files live under
   `~/.cache/fungo/bbref_cache/` by default (same `$XDG_CACHE_HOME` convention
   as the Chadwick register).
 - `fungo.fangraphs`: FanGraphs JSON API access — major/minor-league
@@ -120,12 +121,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
-- Removed pre-1.0 experimental modules: `fungo.download`, `fungo.field`,
-  `fungo.query`, `fungo.statcast.analysis`, `fungo.statcast.base`,
-  `fungo.statcast.leaderboard`, and `fungo.statcast.query`.
+- Removed the experimental modules of the pre-1.0 `pastime` package:
+  `pastime.download`, `pastime.field`, `pastime.query`,
+  `pastime.statcast.analysis`, `pastime.statcast.base`,
+  `pastime.statcast.leaderboard`, and `pastime.statcast.query`.
 
 ### Notes
 
-- `fungo.statcast.get_top_performers` raises `SavantError` because Baseball
-  Savant currently serves that page with an empty inline JSON payload and
-  renders the cards directly in HTML.
+- There is no `get_top_performers` wrapper: Baseball Savant serves that page
+  with an empty inline JSON payload and renders the cards directly in HTML, so
+  there is nothing to parse.

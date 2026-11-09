@@ -6,7 +6,7 @@ parsed JSON):
 - :mod:`fungo.statcast.search` — pitch-level search, matchup/team/game
   convenience queries, and per-arsenal aggregation.
 - :mod:`fungo.statcast.leaderboards` — the leaderboard registry, a
-  ``year_format``-aware fetcher, typed wrappers for ~33 boards, percentile
+  ``year_format``-aware fetcher, typed per-board wrappers, percentile
   rankings, and HTML-backed scrapers (park factors, hot stove, rolling windows).
 - :mod:`fungo.statcast.physics` — Nathan (2021) derived spin columns and
   spin-axis-to-clock conversion.

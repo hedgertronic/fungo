@@ -68,7 +68,7 @@ For local development:
 
 ```bash
 uv sync --all-extras --dev
-uv run ruff check src tests
+uv run ruff check .
 uv run pytest
 ```
 
@@ -123,10 +123,10 @@ Important options:
 
 - `player_type`: `"pitcher"` or `"batter"`.
 - `player_id`: MLBAM player ID.
-- `team`: team abbreviation/name, resolved through Fungo constants.
-- `home_road`: home/away filter for team searches.
 - `level`: `"mlb"` or `"milb"`.
 - arbitrary Savant filters such as `hfPT`, `hfBBT`, `hfGT`, or `game_date_gt`.
+
+For a team filter resolved from a name or code, use `search_team` (below).
 
 Savant itself documents only the *output* columns; the complete input-param
 vocabulary (every `hf*` filter with its accepted values, the `metric_N`
@@ -150,8 +150,8 @@ Convenience helpers build common Statcast search filters:
 
 - `search_game(game_pk, level="mlb", **filters)`: all pitches for one MLB or MiLB game.
 - `search_matchup(pitcher_id=..., batter_id=..., start_date=..., end_date=...)`: pitcher/batter matchups.
-- `search_team(team, start_date=..., end_date=..., home_road=None, level="mlb")`: team-filtered searches.
-- `get_pitcher_arsenal(player_id, start_date, end_date, level="mlb")`: aggregated pitch arsenal rows.
+- `search_team(team, start_date=..., end_date=..., side="any", level="mlb")`: team-filtered searches (`side` is `"any"`, `"home"`, or `"away"`; `team` is resolved through `fungo.constants.resolve_team`).
+- `get_pitcher_arsenal(pitcher_id, start_date, end_date, level="mlb")`: aggregated pitch arsenal rows.
 - `aggregate_pitcher_arsenal(rows)`: aggregate already-fetched pitch rows.
 
 ```python
@@ -223,12 +223,13 @@ Some Baseball Savant pages do not expose CSV. Fungo parses their inline JSON:
 
 ### Derived Spin Physics
 
-`add_spin_columns(...)` adds Alan Nathan-style derived spin physics columns to Statcast pitch rows fetched by search.
+`add_spin_columns(...)` adds Alan Nathan-style derived spin physics columns to pitch rows. Each row needs `release_extension`, `vx0`/`vy0`/`vz0`, `ax`/`ay`/`az`, and the spin components `spinx`/`spiny`/`spinz`. Statcast search output carries the velocity and acceleration columns but not the spin components, so you must supply `spinx`/`spiny`/`spinz` yourself (for example from TrackMan data); rows missing any input come back unchanged.
 
 ```python
 from fungo.statcast import add_spin_columns, axis_to_clock
 
-enriched = add_spin_columns(pitches)
+# rows: pitch dicts that include spinx/spiny/spinz alongside the search columns.
+enriched = add_spin_columns(rows)
 clock = axis_to_clock(225)
 ```
 
@@ -256,7 +257,7 @@ Player/person endpoints:
 
 - `get_people(person_ids, hydrate=None, fields=None)`
 - `get_person(person_id, hydrate=None, fields=None)`
-- `search_players(names=None, person_ids=None, active=None, current_team_id=None, sport_id=None)`
+- `search_players(names=None, person_ids=None, *, active=None, current_team_id=None, sport_id=None)`
 - `search_player_matches(name, sport_id=1)`
 - `resolve_player_id(name, sport_id=1)`
 - `get_player_changes(...)`
@@ -392,6 +393,10 @@ Named splits include handedness (`vs_lhp`, `vs_rhp`, `vs_lhh`, `vs_rhh`), base s
 
 The `pitch_splits` keyword filters by pitch type or count (`"fourseam"`, `"slider"`, `"count_3_2"`, etc. -- see `PITCH_SPLIT_CODES`; full 47-code table in `PITCH_SPLIT_CODE_TABLE`):
 
+```python
+sliders = fangraphs.get_split_leaders("P", 2025, pitch_splits="slider")
+```
+
 ### Projections
 
 ZiPS, Steamer, ATC, THE BAT/X, OOPSY, and Depth Charts, as one call each — typed values, the FanGraphs/MLBAM id crosswalk, and (Steamer only) uncertainty quantiles:
@@ -401,7 +406,7 @@ proj = fangraphs.get_projections("steamer", "bat")   # 4,000+ players
 zips = fangraphs.get_projections("zips", "pit")
 ```
 
-Rest-of-season variants use the `r`-prefixed slugs in `ROS_PROJECTION_SYSTEMS` (community-reported; Steamer's is irregularly `steamerr`).
+Rest-of-season variants use the slugs in `ROS_PROJECTION_SYSTEMS`, all eight live-verified: most are `r`-prefixed (`rzips`, `rthebat`, ...), Steamer's is suffixed (`steamerr`), and ATC/OOPSY add a `dc` suffix (`ratcdc`, `roopsydc`).
 
 ### Player Stats And Game Logs
 
@@ -510,7 +515,8 @@ An opt-in local cache avoids re-fetching pages you already have. A cache hit ski
 from fungo import bbref
 
 # Enable once at the top of your script. Historical pages are immutable,
-# so no TTL is needed. Pass ttl=<seconds> for current-season pages
+# so no TTL is needed. ttl=<seconds> sets one expiry for every cached entry
+# in the process -- pass it when you also fetch current-season pages
 # (standings, daily scoreboards) that change as the season progresses.
 bbref.enable_cache()
 

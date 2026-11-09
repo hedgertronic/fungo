@@ -3,7 +3,7 @@
 Includes :func:`get_player_stats_all_sports`, the fan-out helper for the known
 gotcha that ``sportId`` inside ``stats(...)`` is scalar-only — a comma or
 bracketed list silently returns empty results, so full MLB+MiLB coverage
-requires one request per ``sportId`` (see ``references/gotchas.md``, section A).
+requires one request per ``sportId``.
 """
 
 from __future__ import annotations

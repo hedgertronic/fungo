@@ -4,11 +4,15 @@ Historical Baseball-Reference pages are immutable once published; repeat
 requests for the same URL spend rate-limit budget unnecessarily. Call
 :func:`enable_cache` once at application start-up to activate the cache.
 The cache is off by default — :func:`~fungo.bbref.session.bbref_bytes`
-behaves exactly as today unless :func:`enable_cache` has been called.
+always fetches through the rate limiter unless :func:`enable_cache` has been
+called.
 
-Callers fetching current-season pages (standings, daily scoreboards)
-should pass a ``ttl`` so stale entries are eventually refreshed. Historical
-player pages, game logs, and WAR files are immutable and need no TTL.
+The TTL is one process-wide value set by :func:`enable_cache` and applied to
+every cached entry; there is no per-page TTL. Historical player pages, game
+logs, and WAR files are immutable and need no TTL; a process that fetches
+current-season pages (standings, daily scoreboards) should enable the cache
+with a ``ttl`` so those entries are eventually refreshed (which also expires
+historical entries on the same schedule).
 
 Example::
 
@@ -17,7 +21,8 @@ Example::
     # Enable for immutable historical pages (no expiry).
     bbref.enable_cache()
 
-    # Enable with a 1-hour TTL for current-season standings.
+    # Or: a 1-hour TTL on every entry, for a process fetching
+    # current-season standings.
     bbref.enable_cache(ttl=3600)
 
     # Inspect / clean the cache directory.
@@ -76,13 +81,14 @@ def enable_cache(ttl: float | None = None, path: str | Path | None = None) -> Pa
     A cache hit skips the rate limiter entirely — no budget is spent and
     no delay is incurred. Historical B-R pages are immutable; ``ttl=None``
     means entries never expire and is appropriate for anything from a
-    completed season. Callers fetching current-season pages (standings,
-    daily scoreboards) should pass a ``ttl`` so entries are refreshed as
-    the season progresses.
+    completed season. The ``ttl`` is process-wide: it applies to every cached
+    entry until the next :func:`enable_cache` call, so a process fetching
+    current-season pages (standings, daily scoreboards) should pass one so
+    those entries are refreshed as the season progresses.
 
     Args:
-        ttl: Entry lifetime in seconds. ``None`` means entries never
-            expire.
+        ttl: Entry lifetime in seconds, applied to every cached entry.
+            ``None`` means entries never expire.
         path: Cache directory. ``None`` resolves to
             ``<XDG_CACHE_HOME or ~/.cache>/fungo/bbref_cache/``, the
             same convention used by :mod:`fungo.lookup` for the Chadwick

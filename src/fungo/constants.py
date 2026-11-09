@@ -2,7 +2,7 @@
 
 Module-level mappings for pitch types, plate-appearance and pitch results,
 batted-ball types, quality-of-contact buckets, base states, game types, and
-fielding positions, ported from the Statcast skill reference tables. Teams are
+fielding positions. Teams are
 enriched with full name / city / alias metadata, and three resolvers turn loose
 client input into canonical codes, raising :class:`ValidationError` (with a
 "did you mean?" suggestion) on a miss.

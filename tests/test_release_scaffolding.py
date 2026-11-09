@@ -128,4 +128,6 @@ def test_changelog_documents_v1_release():
     text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     assert "## [1.0.0]" in text
     assert "GitHub Actions CI across Python 3.12-3.14" in text
-    assert "get_top_performers" in text
+    assert "There is no `get_top_performers` wrapper" in text
+    assert not hasattr(statcast, "get_top_performers")
+    assert not hasattr(lb, "get_top_performers")
