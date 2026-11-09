@@ -23,6 +23,21 @@ page.
    exclude bunts = `hfFlag=is\.\.bunt\.\.not|`. Unlike the other selectors,
    flag filters must **all** be satisfied (AND, not OR).
 
+### Where fungo's code differs from this reference
+
+The params fungo itself emits do not all follow this reference. Where they
+disagree:
+
+- **Trailing pipe**: the `fungo search` CLI joins `--hfPT=FF,SL` as
+  `FF|SL` (no trailing pipe); `search_team` emits `hfTeam=<code>|` (with
+  one). Values passed to `search_pitches` as keyword filters go out verbatim.
+- **`hfTeam` values**: `search_team(side="any")` sends the 3-letter club code
+  (`hfTeam=NYY|`), not the MLBAM numeric id the current UI emits (see
+  "Notable gotchas" below).
+- **Minors**: `level="milb"` requests the separate
+  `/statcast-search-minors/csv` path rather than adding `minors=true` to
+  `/statcast_search/csv` as in the skeleton below.
+
 ## CSV export skeleton
 
 ```
