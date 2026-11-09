@@ -9,6 +9,7 @@ import urllib.request
 
 import pytest
 
+import fungo
 from fungo import http
 from fungo.exceptions import RequestError
 from fungo.http import map_concurrent, parse_csv, request_bytes
@@ -81,6 +82,10 @@ def test_request_bytes_merges_custom_headers(monkeypatch):
     request_bytes("https://example.com/x", headers={"Accept": "application/json"})
     assert captured["headers"]["User-agent"] == http.USER_AGENT
     assert captured["headers"]["Accept"] == "application/json"
+
+
+def test_user_agent_carries_package_version():
+    assert http.USER_AGENT.endswith(f"fungo/{fungo.__version__})")
 
 
 #####################################################################

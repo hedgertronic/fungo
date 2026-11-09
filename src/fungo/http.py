@@ -21,11 +21,17 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable, Sequence
+from importlib.metadata import PackageNotFoundError, version
 from typing import Any, cast
 
 from fungo.exceptions import RequestError
 
-USER_AGENT = "Mozilla/5.0 (compatible; fungo/1.0.1)"
+try:
+    _FUNGO_VERSION = version("fungo")
+except PackageNotFoundError:  # pragma: no cover - source tree fallback
+    _FUNGO_VERSION = "unknown"
+
+USER_AGENT = f"Mozilla/5.0 (compatible; fungo/{_FUNGO_VERSION})"
 
 
 #####################################################################
@@ -120,8 +126,7 @@ def request_json(
         The parsed JSON value (``dict`` or ``list``).
 
     Raises:
-        RequestError: On transport failure.
-        json.JSONDecodeError: If the body is not valid JSON.
+        RequestError: On transport failure, or if the body is not valid JSON.
     """
     raw = request_bytes(url, params=params, **kw)
     try:

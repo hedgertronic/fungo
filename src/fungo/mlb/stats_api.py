@@ -6,8 +6,8 @@ response (``dict``) exactly as the API produced it. Transport (retry, backoff,
 builder over it — base URL selection (v1 vs v1.1), param assembly, and date
 formatting.
 
-Gotchas worth remembering when building params (see the module docstrings and
-``references/gotchas.md`` ported throughout this subpackage):
+Gotchas worth remembering when building params (see also the module docstrings
+throughout this subpackage):
 
 - The API rarely errors on malformed input; it returns ``200 OK`` with an empty
   but structurally valid payload. Missing data looks identical to "no data."

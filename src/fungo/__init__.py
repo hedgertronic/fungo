@@ -31,9 +31,10 @@ except PackageNotFoundError:  # pragma: no cover - source tree fallback
 
 # Subpackages are the primary surface: `fungo.statcast.search_pitches(...)`,
 # `fungo.mlb.get_schedule(...)`, `fungo.lookup.lookup(...)`. The names below
-# are the small cross-cutting top level — exceptions and the shared resolvers.
-# Per-domain functions stay under their subpackage to avoid collisions (both
-# statcast and mlb define PITCH_TYPES, etc.).
+# are the small cross-cutting top level — the subpackages, the exception types,
+# and __version__. Per-domain names stay under their subpackage to avoid
+# collisions (both fungo.constants and fungo.mlb.constants define PITCH_TYPES,
+# etc.).
 __all__ = [
     "BBRefError",
     "FangraphsError",

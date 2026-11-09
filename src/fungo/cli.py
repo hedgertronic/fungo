@@ -7,10 +7,9 @@ render the result as CSV or JSON.
 The CLI holds no business logic: each subcommand maps flags onto an existing
 public function and prints what comes back.
 
-Expected library errors (the ``FungoError`` family — ``ValidationError``,
-``SavantError``, ``RequestError``, ``MLBStatsError``, ``FangraphsError``,
-``BBRefError``) are caught at the ``main`` boundary and reported as a one-line
-``error:`` message on stderr with exit code 1; argparse handles usage errors.
+Expected library errors (any ``FungoError``) are caught at the ``main``
+boundary and reported as a one-line ``error:`` message on stderr with exit
+code 1; argparse handles usage errors.
 Unexpected exceptions (i.e. bugs) are left to propagate so they surface a full
 traceback.
 """

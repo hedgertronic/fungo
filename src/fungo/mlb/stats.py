@@ -2,7 +2,7 @@
 
 Also exposes :func:`build_stats_hydrate` for constructing the ``stats(...)``
 hydration string used on ``/api/v1/people``. The builder enforces the most
-important gotcha (``references/gotchas.md`` section A): ``sportId`` inside
+important gotcha: ``sportId`` inside
 ``stats(...)`` is scalar-only — a comma or bracketed list silently returns
 empty results. Fan out one request per ``sportId`` instead (see
 :func:`fungo.mlb.people.get_player_stats_all_sports`).

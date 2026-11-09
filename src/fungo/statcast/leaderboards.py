@@ -1184,9 +1184,9 @@ def get_leaderboard(
         ``list[dict[str, Any]]`` of rows.
 
     Raises:
-        ValidationError: If ``slug`` is unknown (with a did-you-mean suggestion).
-        ValueError: If ``slug`` has no CSV endpoint, or is ``year_format="special"``
-            and ``year`` is an ``int`` (use :func:`active_spin_year`).
+        ValidationError: If ``slug`` is unknown (with a did-you-mean suggestion),
+            has no CSV endpoint, or is ``year_format="special"`` and ``year``
+            is an ``int`` (use :func:`active_spin_year`).
     """
     if slug not in LEADERBOARDS:
         raise ValidationError(slug, "leaderboard", valid_values=list(LEADERBOARDS))

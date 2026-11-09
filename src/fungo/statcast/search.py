@@ -5,7 +5,7 @@ callers cast themselves. Built on :mod:`fungo.http` for transport, retry, and
 CSV parsing; this module adds the Savant-specific HTML-vs-CSV detection (Savant
 serves an HTML error page, not a 4xx, when params are unacceptable).
 
-Gotchas folded in from the Statcast skill references:
+Gotchas:
 
 - **30,000-row hard cap.** :func:`search_pitches` auto-chunks ranges longer
   than 5 days into 1-day requests, fanned through :func:`fungo.http.map_concurrent`.
@@ -239,9 +239,8 @@ def search_pitches(
 def statcast_search(*args: Any, **kwargs: Any) -> list[dict[str, Any]]:
     """Alias for :func:`search_pitches`.
 
-    Retained for callers familiar with the pre-1.0 API and pybaseball-style
-    naming. New code should prefer ``search_pitches`` inside the
-    ``fungo.statcast`` namespace.
+    Provides pybaseball-style naming. New code should prefer
+    ``search_pitches`` inside the ``fungo.statcast`` namespace.
     """
     return search_pitches(*args, **kwargs)
 

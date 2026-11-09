@@ -17,7 +17,8 @@ Output columns (all floats), per :data:`DERIVED_COLUMNS`: induced vs gyro
 spin, Magnus / non-Magnus decomposition, spin efficiency, drag, lift, tilt,
 release mechanics, and flight timing.
 
-Reference source: Nathan (2021), driveline/solving-physics/ref/nathan.py.
+Reference: Alan M. Nathan, "What Is the Hawkeye Spin Data Teaching Us?" Parts I
+and II (2021), https://baseball.physics.illinois.edu/.
 """
 
 from __future__ import annotations
