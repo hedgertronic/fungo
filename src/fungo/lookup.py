@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from fungo import http
+from fungo._cache import atomic_write
 from fungo.exceptions import StaleCacheWarning
 
 CHADWICK_SHARD_URL = "https://raw.githubusercontent.com/chadwickbureau/register/master/data/people-{}.csv"
@@ -78,7 +79,7 @@ def refresh() -> Path:
     global _ROWS
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     text = _fetch_all_shards()
-    CACHE_FILE.write_text(text, encoding="utf-8")
+    atomic_write(CACHE_FILE, text.encode("utf-8"))
     _ROWS = None
     return CACHE_FILE
 

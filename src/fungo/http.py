@@ -95,9 +95,10 @@ def request_bytes(
             if e.code < 500:
                 raise RequestError(f"HTTP {e.code} for {full_url}: {e.reason}") from e
             last_err = e
-            time.sleep(2**attempt)
         except (urllib.error.URLError, TimeoutError, OSError) as e:
             last_err = e
+
+        if attempt + 1 < retries:
             time.sleep(2**attempt)
 
     raise RequestError(f"Failed after {retries} retries for {full_url}: {last_err}")
@@ -207,20 +208,20 @@ def map_concurrent[T, R](
     if not items:
         return []
 
+    executor = ThreadPoolExecutor(max_workers=max_workers)
     bar = None
     task_id = None
-    if progress:
-        try:
-            from rich.progress import Progress
-
-            bar = Progress()
-            bar.start()
-            task_id = bar.add_task(label or "Working", total=len(items))
-        except ImportError:
-            bar = None
-
-    executor = ThreadPoolExecutor(max_workers=max_workers)
     try:
+        if progress:
+            try:
+                from rich.progress import Progress
+            except ImportError:
+                pass
+            else:
+                bar = Progress()
+                bar.start()
+                task_id = bar.add_task(label or "Working", total=len(items))
+
         futures = []
         for i, item in enumerate(items):
             futures.append(executor.submit(func, item))

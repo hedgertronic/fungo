@@ -219,6 +219,60 @@ def test_refresh_clears_and_rediscovers(mock_lahman):
     assert mock_lahman["count"] == after_first + 4
 
 
+@pytest.mark.parametrize("failure", ["discover_shared_name", "fetch_table_index"])
+def test_refresh_discovery_failure_preserves_usable_cache(
+    mock_lahman, monkeypatch, failure
+):
+    rows = tables_mod.get_table("Parks")
+    old_index = tables_mod._INDEX
+    old_disk_index = tables_mod._index_file().read_bytes()
+
+    def fail(*args):
+        raise LahmanError("discovery failed")
+
+    monkeypatch.setattr(api, failure, fail)
+    with pytest.raises(LahmanError, match="discovery failed"):
+        tables_mod.refresh()
+
+    assert tables_mod._INDEX is old_index
+    assert tables_mod._index_file().read_bytes() == old_disk_index
+    assert tables_mod.get_table("Parks") == rows
+
+
+def test_refresh_publication_failure_preserves_memory_and_disk(
+    mock_lahman, monkeypatch
+):
+    from pathlib import Path
+
+    rows = tables_mod.get_table("Parks")
+    old_index = tables_mod._INDEX
+    old_disk_index = tables_mod._index_file().read_bytes()
+    monkeypatch.setattr(api, "discover_shared_name", lambda: "new-release")
+    monkeypatch.setattr(api, "fetch_table_index", lambda _: {"Parks": "f_999"})
+
+    def fail(*args):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(Path, "replace", fail)
+    with pytest.raises(OSError, match="disk full"):
+        tables_mod.refresh()
+    assert tables_mod._INDEX is old_index
+    assert tables_mod._index_file().read_bytes() == old_disk_index
+    assert tables_mod.get_table("Parks") == rows
+
+
+def test_index_write_failure_does_not_publish_memory(mock_lahman, monkeypatch):
+    from pathlib import Path
+
+    def fail(*args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(Path, "replace", fail)
+    with pytest.raises(OSError, match="disk full"):
+        tables_mod.list_tables()
+    assert tables_mod._INDEX is None
+
+
 def test_clear_cache_forces_full_refetch(mock_lahman):
     tables_mod.get_table("Parks")
     after_first = mock_lahman["count"]

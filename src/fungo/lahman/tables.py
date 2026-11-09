@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from fungo import http
+from fungo._cache import atomic_write
 from fungo.exceptions import ValidationError
 from fungo.lahman import api
 
@@ -83,10 +84,11 @@ def _load_index(force_refresh: bool = False) -> dict[str, Any]:
 
     shared_name = api.discover_shared_name()
     files = api.fetch_table_index(shared_name)
-    _INDEX = {"shared_name": shared_name, "files": files}
+    index = {"shared_name": shared_name, "files": files}
 
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    index_file.write_text(json.dumps(_INDEX, indent=2), encoding="utf-8")
+    atomic_write(index_file, json.dumps(index, indent=2).encode("utf-8"))
+    _INDEX = index
     return _INDEX
 
 
@@ -162,7 +164,7 @@ def get_table(name: str, *, force_refresh: bool = False) -> list[dict[str, Any]]
 
     raw = api.download_table(index["shared_name"], index["files"][table], table)
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    cache_file.write_bytes(raw)
+    atomic_write(cache_file, raw)
     return http.parse_csv(raw)
 
 
@@ -212,11 +214,12 @@ def clear_cache() -> None:
 
 
 def refresh() -> Path:
-    """Clear the cache and re-discover the access path from the SABR page.
+    """Re-discover the access path, then invalidate cached tables.
 
     Cached tables are deleted (each annual release changes the Box file ids,
     so stale CSVs would otherwise mask the new data) and the link/file-id map
-    is re-discovered and re-cached.
+    is re-discovered and re-cached. Discovery failure preserves the previous
+    index and tables so cached reads remain available.
 
     Returns:
         Path to the freshly written index file.
@@ -224,6 +227,8 @@ def refresh() -> Path:
     Raises:
         LahmanError: If discovery fails.
     """
-    clear_cache()
     _load_index(force_refresh=True)
+    for path in CACHE_DIR.iterdir():
+        if path.is_file() and path.name != INDEX_FILENAME:
+            path.unlink()
     return _index_file()

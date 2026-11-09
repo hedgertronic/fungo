@@ -153,6 +153,24 @@ def test_get_game_logs_force_refresh_redownloads(mock_retrosheet):
     assert len(mock_retrosheet) == 2
 
 
+def test_force_refresh_missing_member_does_not_return_old_data(
+    mock_retrosheet, monkeypatch
+):
+    retrosheet.get_plays(2024)
+    cached = files_mod.CACHE_DIR / "plays" / "2024plays.csv"
+    old_bytes = cached.read_bytes()
+    monkeypatch.setattr(
+        http,
+        "request_bytes",
+        lambda *a, **kw: _zip_bytes({"other.csv": "id\nnew\n"}),
+    )
+
+    with pytest.raises(RequestError, match=r"2024plays\.csv.*is not a member"):
+        retrosheet.get_plays(2024, force_refresh=True)
+    assert cached.read_bytes() == old_bytes
+    assert not (cached.parent / "other.csv").exists()
+
+
 def test_get_game_logs_year_validation(mock_retrosheet):
     with pytest.raises(ValidationError):
         retrosheet.get_game_logs(1870)

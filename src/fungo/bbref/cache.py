@@ -36,6 +36,8 @@ import urllib.parse
 from pathlib import Path
 from typing import Any
 
+from fungo._cache import atomic_write
+
 #####################################################################
 # Cache state
 #####################################################################
@@ -201,4 +203,4 @@ def cache_put(url: str, params: dict[str, Any] | None, data: bytes) -> None:
     if not _CACHE_ENABLED or cache_dir is None:
         return
     key = _cache_key(url, params)
-    (cache_dir / key).write_bytes(data)
+    atomic_write(cache_dir / key, data)

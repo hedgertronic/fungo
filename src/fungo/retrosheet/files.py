@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any
 
 from fungo import http
+from fungo._cache import atomic_write
 from fungo.exceptions import RequestError, ValidationError
 from fungo.retrosheet.fields import GAME_LOG_FIELDS, SCHEDULE_FIELDS
 
@@ -117,7 +118,9 @@ def _dataset_url(dataset: str, year: int | str | None) -> str:
     return template.format(year=_coerce_year(dataset, year))
 
 
-def _extract_zip(url: str, dataset: str) -> list[Path]:
+def _extract_zip(
+    url: str, dataset: str, *, required_member: str | None = None
+) -> list[Path]:
     """Download a dataset zip and extract every file member into the cache dir.
 
     Members are written under ``CACHE_DIR/<dataset>/`` by basename (member
@@ -127,28 +130,36 @@ def _extract_zip(url: str, dataset: str) -> list[Path]:
     Args:
         url: The zip's download URL.
         dataset: Cache subdirectory name.
+        required_member: Basename that must be in the archive before any cache
+            files are written. ``None`` extracts without a membership check.
 
     Returns:
         Paths of the extracted files.
 
     Raises:
-        RequestError: On transport failure or a non-zip response body.
+        RequestError: On transport failure, a non-zip response body, or a
+            missing required member.
     """
     raw = http.request_bytes(url, timeout=120)
     try:
         archive = zipfile.ZipFile(io.BytesIO(raw))
     except zipfile.BadZipFile as exc:
         raise RequestError(f"Response from {url} is not a zip archive") from exc
-    target = CACHE_DIR / dataset
-    target.mkdir(parents=True, exist_ok=True)
     paths: list[Path] = []
     with archive:
+        if required_member is not None and not any(
+            not info.is_dir() and Path(info.filename).name == required_member
+            for info in archive.infolist()
+        ):
+            raise RequestError(f"{required_member!r} is not a member of {url}")
+        target = CACHE_DIR / dataset
+        target.mkdir(parents=True, exist_ok=True)
         for info in archive.infolist():
             name = Path(info.filename).name
             if info.is_dir() or not name:
                 continue
             path = target / name
-            path.write_bytes(archive.read(info))
+            atomic_write(path, archive.read(info))
             paths.append(path)
     return paths
 
@@ -178,9 +189,7 @@ def _member_bytes(
     url = _dataset_url(dataset, year)
     path = CACHE_DIR / dataset / member
     if force_refresh or not path.exists():
-        _extract_zip(url, dataset)
-        if not path.exists():
-            raise RequestError(f"{member!r} is not a member of {url}")
+        _extract_zip(url, dataset, required_member=member)
     return path.read_bytes()
 
 
