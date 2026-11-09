@@ -55,8 +55,7 @@ from fungo.statcast.physics import axis_to_clock
 BASE_URL = "https://baseballsavant.mlb.com"
 SEARCH_PATH_MLB = "/statcast_search/csv"
 SEARCH_PATH_MILB = "/statcast-search-minors/csv"
-MAX_ROWS_PER_QUERY = 30_000
-DEFAULT_CHUNK_DAYS = 1
+DEFAULT_CHUNK_DAYS = 1  # days per request when a range is chunked
 DEFAULT_DELAY = 1.0  # seconds between chunked requests
 _VALID_LEVELS = {"mlb", "milb"}
 _VALID_PLAYER_TYPES = {"pitcher", "batter"}
@@ -213,27 +212,27 @@ def search_pitches(
         single["game_date_lt"] = end_date
         return _fetch_csv(base, params=single)
 
-    days: list[str] = []
+    chunks: list[tuple[str, str]] = []
     current = dt_start
     while current <= dt_end:
-        days.append(current.strftime("%Y-%m-%d"))
-        current += timedelta(days=1)
+        chunk_end = min(current + timedelta(days=DEFAULT_CHUNK_DAYS - 1), dt_end)
+        chunks.append((current.strftime("%Y-%m-%d"), chunk_end.strftime("%Y-%m-%d")))
+        current = chunk_end + timedelta(days=1)
 
-    def fetch_day(day: str) -> list[dict[str, Any]]:
-        day_params = dict(base_params)
-        day_params["game_date_gt"] = day
-        day_params["game_date_lt"] = day
-        return _fetch_csv(base, params=day_params)
+    def fetch_chunk(chunk: tuple[str, str]) -> list[dict[str, Any]]:
+        chunk_params = dict(base_params)
+        chunk_params["game_date_gt"], chunk_params["game_date_lt"] = chunk
+        return _fetch_csv(base, params=chunk_params)
 
-    per_day = http.map_concurrent(
-        fetch_day,
-        days,
+    per_chunk = http.map_concurrent(
+        fetch_chunk,
+        chunks,
         max_workers=max_workers,
         delay=delay,
         progress=progress,
         label="statcast_search",
     )
-    return [row for day_rows in per_day for row in day_rows]
+    return [row for chunk_rows in per_chunk for row in chunk_rows]
 
 
 def statcast_search(*args: Any, **kwargs: Any) -> list[dict[str, Any]]:
