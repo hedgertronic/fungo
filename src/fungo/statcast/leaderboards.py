@@ -19,10 +19,10 @@ Every registry entry is a dict with these fields:
     key_columns        list[str]
     notes              str | None
 
-For non-CSV leaderboards (HTML-embedded JSON or browser-only):
+For non-CSV leaderboards (HTML-embedded JSON):
 
     csv_available      False
-    access_via         "_fetch_html_json:<var_name>" | "browser_only"
+    access_via         "_fetch_html_json:<var_name>"
 
 ``year_format`` is load-bearing — it controls how :func:`fetch_leaderboard`
 emits the season into the query string:
@@ -41,7 +41,6 @@ and ``season_array`` (``bat-tracking/swing-timing-miss-distance``).
 
 from __future__ import annotations
 
-import contextlib
 import re
 from typing import Any
 
@@ -1238,43 +1237,6 @@ def active_spin_year(year: int, method: str = "spin-based") -> str:
     if method not in ("spin-based", "observed"):
         raise ValidationError(method, "method", valid_values=["spin-based", "observed"])
     return f"{year}_{method}"
-
-
-def _cast_numeric(
-    rows: list[dict[str, Any]], cols: list[str] | None = None
-) -> list[dict[str, Any]]:
-    """Return a NEW ``list[dict]`` with numeric columns coerced to ``float``.
-
-    Empty strings become ``None``; non-numeric strings are left as ``str``.
-    ``cols=None`` auto-detects from the first row's keys.
-
-    Args:
-        rows: ``list[dict]`` to coerce.
-        cols: Columns to coerce, or ``None`` to use every key in the first row.
-
-    Returns:
-        A ``list[dict]`` with coerced values.
-    """
-    if not rows:
-        return []
-
-    if cols is None:
-        cols = list(rows[0])
-
-    out: list[dict[str, Any]] = []
-    for r in rows:
-        nr = dict(r)
-        for c in cols:
-            if c not in nr:
-                continue
-            v = nr[c]
-            if v == "" or v is None:
-                nr[c] = None
-            else:
-                with contextlib.suppress(TypeError, ValueError):
-                    nr[c] = float(v)
-        out.append(nr)
-    return out
 
 
 #####################################################################

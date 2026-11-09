@@ -223,27 +223,6 @@ def test_active_spin_year_composes():
         lb.active_spin_year(2024, "bogus")
 
 
-def test_cast_numeric_auto_detects_columns_and_preserves_input():
-    rows = [
-        {"name": "Judge", "barrels": "28", "rate": "12.5", "blank": ""},
-        {"name": "Cole", "barrels": "not numeric", "rate": None, "blank": "x"},
-    ]
-
-    out = lb._cast_numeric(rows)
-
-    assert out == [
-        {"name": "Judge", "barrels": 28.0, "rate": 12.5, "blank": None},
-        {"name": "Cole", "barrels": "not numeric", "rate": None, "blank": "x"},
-    ]
-    assert rows[0]["barrels"] == "28"
-
-
-def test_cast_numeric_empty_and_selected_columns():
-    assert lb._cast_numeric([]) == []
-    out = lb._cast_numeric([{"a": "1", "b": "2"}], cols=["b", "missing"])
-    assert out == [{"a": "1", "b": 2.0}]
-
-
 def test_list_and_describe():
     assert "bat-tracking/swing-timing-miss-distance" in lb.list_leaderboards("batting")
     meta = lb.describe_leaderboard("bat-tracking")

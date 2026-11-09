@@ -38,11 +38,6 @@ from fungo.exceptions import LahmanError
 SABR_URL = "https://sabr.org/lahman-database/"
 BOX_BASE_URL = "https://sabr.box.com"
 
-# The CSV folder's shared-link hash for version 2025 (verified 2026-07-11).
-# A reference for manual recovery only — discovery always runs against the
-# SABR page at runtime, since this hash changes with each annual release.
-FALLBACK_SHARED_NAME = "y1prhc795jk8zvmelfd3jq7tl389y6cd"
-
 _REVERIFY_HINT = (
     "The access path rides an undocumented Box internal and needs "
     f"re-verification against {SABR_URL} — do not retry."
