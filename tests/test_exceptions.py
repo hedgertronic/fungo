@@ -19,6 +19,13 @@ def test_hierarchy():
     assert issubclass(ValidationError, ValueError)
 
 
+def test_request_error_status():
+    assert RequestError("offline").status is None
+    err = RequestError("HTTP 403 for x", status=403)
+    assert err.status == 403
+    assert str(err) == "HTTP 403 for x"
+
+
 def test_validation_error_suggests_close_match():
     err = ValidationError("Dodgrs", "team", ["Dodgers", "Padres", "Giants"])
     msg = str(err)

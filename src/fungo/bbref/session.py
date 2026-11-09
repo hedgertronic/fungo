@@ -88,8 +88,8 @@ _limiter = _RateLimiter(MIN_REQUEST_INTERVAL)
 def _fetch(url: str, params: dict[str, Any] | None) -> bytes:
     """Transport-only fetch via ``curl_cffi`` with Chrome TLS impersonation.
 
-    HTTP failures raise :class:`RequestError` with an ``HTTP <code>`` message
-    so :func:`bbref_bytes` can map blocks to :class:`BBRefError`. No retries —
+    HTTP failures raise :class:`RequestError` carrying the ``status`` code so
+    :func:`bbref_bytes` can map blocks to :class:`BBRefError`. No retries —
     retrying through a rate-limit block only extends it.
 
     Args:
@@ -104,7 +104,9 @@ def _fetch(url: str, params: dict[str, Any] | None) -> bytes:
     """
     resp = curl_requests.get(url, params=params, impersonate="chrome", timeout=30)
     if resp.status_code >= 400:
-        raise RequestError(f"HTTP {resp.status_code} for {url}")
+        raise RequestError(
+            f"HTTP {resp.status_code} for {url}", status=resp.status_code
+        )
     return bytes(resp.content)
 
 
@@ -138,10 +140,8 @@ def bbref_bytes(path: str, params: dict[str, Any] | None = None) -> bytes:
     try:
         data = _fetch(url, params)
     except RequestError as exc:
-        msg = str(exc)
-        for code in (403, 429):
-            if f"HTTP {code}" in msg:
-                raise BBRefError(_BLOCKED_HINT.format(code=code)) from exc
+        if exc.status in (403, 429):
+            raise BBRefError(_BLOCKED_HINT.format(code=exc.status)) from exc
         raise
     cache_put(url, params, data)
     return data

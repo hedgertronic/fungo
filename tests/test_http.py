@@ -119,9 +119,10 @@ def test_request_bytes_4xx_raises_immediately_without_retry(monkeypatch):
         raise _http_error(404)
 
     monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
-    with pytest.raises(RequestError, match="HTTP 404"):
+    with pytest.raises(RequestError, match="HTTP 404") as info:
         request_bytes("https://example.com/x")
     assert calls["n"] == 1  # no retry on 4xx
+    assert info.value.status == 404
 
 
 def test_request_bytes_exhausts_retries_raises(monkeypatch):

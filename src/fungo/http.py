@@ -93,7 +93,9 @@ def request_bytes(
                 return cast(bytes, resp.read())
         except urllib.error.HTTPError as e:
             if e.code < 500:
-                raise RequestError(f"HTTP {e.code} for {full_url}: {e.reason}") from e
+                raise RequestError(
+                    f"HTTP {e.code} for {full_url}: {e.reason}", status=e.code
+                ) from e
             last_err = e
             time.sleep(2**attempt)
         except (urllib.error.URLError, TimeoutError, OSError) as e:

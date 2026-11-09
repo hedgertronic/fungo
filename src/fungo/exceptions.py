@@ -30,7 +30,18 @@ class FungoError(Exception):
 
 
 class RequestError(FungoError):
-    """Transport failure (HTTP status, network, or timeout). Raised by http.py."""
+    """Transport failure (HTTP status, network, or timeout). Raised by http.py.
+
+    Attributes:
+        status: The HTTP status code when the failure is an error response
+            raised without retrying (a 4xx from :mod:`fungo.http`, any error
+            status from the Baseball-Reference transport); ``None`` for
+            network errors, timeouts, exhausted retries, and body problems.
+    """
+
+    def __init__(self, message: str, *, status: int | None = None) -> None:
+        super().__init__(message)
+        self.status = status
 
 
 class SavantError(FungoError):
