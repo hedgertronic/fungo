@@ -1,7 +1,16 @@
-"""Private helpers for publishing complete cache files."""
+"""Private helpers for locating and publishing cache files."""
 
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
+
+
+def cache_root() -> Path:
+    """Return fungo's cache root: ``$XDG_CACHE_HOME/fungo`` or ``~/.cache/fungo``.
+
+    Reads the environment on each call; the directory is not created.
+    """
+    return Path(os.environ.get("XDG_CACHE_HOME") or "~/.cache").expanduser() / "fungo"
 
 
 def atomic_write(path: Path, data: bytes) -> None:

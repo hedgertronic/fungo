@@ -4,7 +4,35 @@ from pathlib import Path
 
 import pytest
 
-from fungo._cache import atomic_write
+from fungo import lookup
+from fungo._cache import atomic_write, cache_root
+from fungo.bbref import cache as bbref_cache
+from fungo.lahman import tables as lahman_tables
+from fungo.retrosheet import files as retrosheet_files
+
+
+def test_cache_root_prefers_xdg_cache_home(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    assert cache_root() == tmp_path / "fungo"
+
+
+@pytest.mark.parametrize("value", [None, ""])
+def test_cache_root_falls_back_to_home_cache(tmp_path, monkeypatch, value):
+    if value is None:
+        monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
+    else:
+        monkeypatch.setenv("XDG_CACHE_HOME", value)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    assert cache_root() == tmp_path / ".cache" / "fungo"
+
+
+def test_module_cache_dirs_share_the_root(tmp_path, monkeypatch):
+    root = cache_root()
+    assert root == lookup.CACHE_DIR
+    assert root / "lahman" == lahman_tables.CACHE_DIR
+    assert root / "retrosheet" == retrosheet_files.CACHE_DIR
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    assert bbref_cache._default_cache_dir() == tmp_path / "fungo" / "bbref_cache"
 
 
 @pytest.mark.parametrize("old", [None, b"previous"])

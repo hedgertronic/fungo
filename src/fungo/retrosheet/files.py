@@ -27,13 +27,12 @@ from __future__ import annotations
 
 import csv
 import io
-import os
 import zipfile
 from pathlib import Path
 from typing import Any
 
 from fungo import http
-from fungo._cache import atomic_write
+from fungo._cache import atomic_write, cache_root
 from fungo.exceptions import RequestError, ValidationError
 from fungo.retrosheet.fields import GAME_LOG_FIELDS, SCHEDULE_FIELDS
 
@@ -51,11 +50,7 @@ DATASETS: dict[str, tuple[str, int | None]] = {
     "season": (f"{BASE_URL}/downloads/{{year}}/{{year}}csvs.zip", 1903),
 }
 
-CACHE_DIR = (
-    Path(os.environ.get("XDG_CACHE_HOME") or "~/.cache").expanduser()
-    / "fungo"
-    / "retrosheet"
-)
+CACHE_DIR = cache_root() / "retrosheet"
 
 
 #####################################################################

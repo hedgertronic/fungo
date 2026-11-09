@@ -14,12 +14,11 @@ empty cells). Callers cast themselves.
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Any
 
 from fungo import http
-from fungo._cache import atomic_write
+from fungo._cache import atomic_write, cache_root
 from fungo.exceptions import ValidationError
 from fungo.lahman import api
 
@@ -27,11 +26,7 @@ from fungo.lahman import api
 # Cache locations
 #####################################################################
 
-CACHE_DIR = (
-    Path(os.environ.get("XDG_CACHE_HOME") or "~/.cache").expanduser()
-    / "fungo"
-    / "lahman"
-)
+CACHE_DIR = cache_root() / "lahman"
 
 # Leading underscore keeps the index clear of any table's cache filename.
 INDEX_FILENAME = "_index.json"
