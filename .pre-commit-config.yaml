@@ -13,14 +13,23 @@ repos:
       - id: trailing-whitespace
         types: [text]
         stages: [pre-commit, pre-push, manual]
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.12.0
+  # ruff and mypy run from the project environment (uv.lock), so hook versions
+  # and mypy's view of third-party types match CI.
+  - repo: local
     hooks:
-      - id: ruff
-        args: [--fix]
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --fix
+        language: system
+        types_or: [python, pyi]
       - id: ruff-format
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.16.0
-    hooks:
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types_or: [python, pyi]
       - id: mypy
+        name: mypy
+        entry: uv run mypy
+        language: system
+        types_or: [python, pyi]
         pass_filenames: false

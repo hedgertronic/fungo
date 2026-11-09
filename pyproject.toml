@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "fungo"
 version = "2.0.0"
-description = "Python tools for baseball data from Statcast, the MLB Stats API, FanGraphs, and Baseball-Reference."
+description = "Python tools for baseball data from Statcast, the MLB Stats API, FanGraphs, Baseball-Reference, Retrosheet, and the Lahman Database."
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [{ name = "Josh Hejka" }]
@@ -51,7 +51,6 @@ dev = [
     "mypy",
     "rich",
     "pre-commit",
-    "types-beautifulsoup4",
 ]
 
 [tool.hatch.build.targets.wheel]
