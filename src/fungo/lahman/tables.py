@@ -1,6 +1,6 @@
 """Lahman table access — discovery-backed downloads with a local cache.
 
-Downloaded tables land under the stdlib user cache dir
+Downloaded tables land under the user cache dir
 (``$XDG_CACHE_HOME``/``~/.cache`` -> ``fungo/lahman/{Table}.csv``), and the
 discovered shared-link/file-id map is cached alongside them as
 ``_index.json``. The database has an annual release cadence, so both caches

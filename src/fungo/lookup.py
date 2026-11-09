@@ -5,7 +5,7 @@ https://github.com/chadwickbureau/register (split into 16 shards by the last hex
 char of ``key_person``).
 
 The ~6 MB register is fetched on demand via :func:`fungo.http.request_bytes`
-and cached under the stdlib user cache dir
+and cached under the user cache dir
 (``$XDG_CACHE_HOME``/``~/.cache`` -> ``fungo/chadwick_people.csv``). Call
 :func:`refresh` or pass ``force_refresh=True`` to update it.
 
