@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 from fungo import http
@@ -42,6 +44,20 @@ _BLOCKED_HINT = (
     "if this persists, that exemption has likely been withdrawn and the "
     "fungo.fangraphs module needs a new access path."
 )
+
+
+@contextmanager
+def _cloudflare_guard() -> Iterator[None]:
+    """Re-raise an HTTP 403 :class:`RequestError` as :class:`FangraphsError`.
+
+    Other transport errors propagate unchanged.
+    """
+    try:
+        yield
+    except RequestError as exc:
+        if exc.status == 403:
+            raise FangraphsError(_BLOCKED_HINT) from exc
+        raise
 
 
 #####################################################################
@@ -69,16 +85,12 @@ def fg_json(path: str, params: dict[str, Any] | None = None) -> Any:
         FangraphsError: On an HTTP 403 (Cloudflare challenge).
         RequestError: On any other transport failure.
     """
-    try:
+    with _cloudflare_guard():
         return http.request_json(
             f"{BASE_URL}{path}",
             params=params,
             headers={"User-Agent": FG_USER_AGENT},
         )
-    except RequestError as exc:
-        if "HTTP 403" in str(exc):
-            raise FangraphsError(_BLOCKED_HINT) from exc
-        raise
 
 
 def fg_json_post(path: str, body: dict[str, Any]) -> Any:
@@ -99,7 +111,7 @@ def fg_json_post(path: str, body: dict[str, Any]) -> Any:
         FangraphsError: On an HTTP 403 (Cloudflare challenge).
         RequestError: On any other transport failure or non-JSON response.
     """
-    try:
+    with _cloudflare_guard():
         return http.request_json(
             f"{BASE_URL}{path}",
             headers={
@@ -108,10 +120,6 @@ def fg_json_post(path: str, body: dict[str, Any]) -> Any:
             },
             data=json.dumps(body).encode("utf-8"),
         )
-    except RequestError as exc:
-        if "HTTP 403" in str(exc):
-            raise FangraphsError(_BLOCKED_HINT) from exc
-        raise
 
 
 def fg_html(path: str, params: dict[str, Any] | None = None) -> str:
@@ -131,16 +139,12 @@ def fg_html(path: str, params: dict[str, Any] | None = None) -> str:
         FangraphsError: On an HTTP 403 (Cloudflare challenge).
         RequestError: On any other transport failure.
     """
-    try:
+    with _cloudflare_guard():
         raw = http.request_bytes(
             f"{BASE_URL}{path}",
             params=params,
             headers={"User-Agent": FG_USER_AGENT},
         )
-    except RequestError as exc:
-        if "HTTP 403" in str(exc):
-            raise FangraphsError(_BLOCKED_HINT) from exc
-        raise
     return raw.decode("utf-8", errors="replace")
 
 
@@ -164,15 +168,11 @@ def fg_page_data(path: str) -> dict[str, Any]:
             unparseable embedded JSON.
         RequestError: On any other transport failure.
     """
-    try:
+    with _cloudflare_guard():
         raw = http.request_bytes(
             f"{BASE_URL}{path}",
             headers={"User-Agent": FG_USER_AGENT},
         )
-    except RequestError as exc:
-        if "HTTP 403" in str(exc):
-            raise FangraphsError(_BLOCKED_HINT) from exc
-        raise
 
     html = raw.decode("utf-8", errors="replace")
     match = re.search(

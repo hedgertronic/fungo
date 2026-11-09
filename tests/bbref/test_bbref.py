@@ -100,7 +100,7 @@ def test_rate_limiter_no_wait_after_interval_elapsed():
 @pytest.mark.parametrize("code", [403, 429])
 def test_blocked_status_raises_bbref_error(monkeypatch, code):
     def fake(url: str, params: Any) -> bytes:
-        raise RequestError(f"HTTP {code} for {url}")
+        raise RequestError(f"HTTP {code} for {url}", status=code)
 
     monkeypatch.setattr(session, "_fetch", fake)
     with pytest.raises(BBRefError, match="do NOT retry"):
@@ -109,7 +109,7 @@ def test_blocked_status_raises_bbref_error(monkeypatch, code):
 
 def test_other_errors_propagate(monkeypatch):
     def fake(url: str, params: Any) -> bytes:
-        raise RequestError(f"HTTP 500 for {url}")
+        raise RequestError(f"HTTP 500 for {url}", status=500)
 
     monkeypatch.setattr(session, "_fetch", fake)
     with pytest.raises(RequestError):
@@ -154,8 +154,9 @@ def test_fetch_4xx_raises_request_error(monkeypatch):
         "get",
         lambda *a, **kw: _FakeResp(404, b""),
     )
-    with pytest.raises(RequestError, match="HTTP 404"):
+    with pytest.raises(RequestError, match="HTTP 404") as info:
         session._fetch(f"{session.BASE_URL}/x", None)
+    assert info.value.status == 404
 
 
 #####################################################################

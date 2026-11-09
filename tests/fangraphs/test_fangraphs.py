@@ -67,7 +67,7 @@ def test_fg_json_sends_okhttp_user_agent(monkeypatch):
 
 def test_fg_json_403_raises_fangraphs_error(monkeypatch):
     def fake(url: str, params: Any = None, **kw: Any) -> Any:
-        raise RequestError(f"HTTP 403 for {url}: Forbidden")
+        raise RequestError(f"HTTP 403 for {url}: Forbidden", status=403)
 
     monkeypatch.setattr(http, "request_json", fake)
     with pytest.raises(FangraphsError, match="okhttp"):
@@ -76,7 +76,7 @@ def test_fg_json_403_raises_fangraphs_error(monkeypatch):
 
 def test_fg_json_other_errors_propagate(monkeypatch):
     def fake(url: str, params: Any = None, **kw: Any) -> Any:
-        raise RequestError(f"HTTP 500 for {url}")
+        raise RequestError(f"HTTP 500 for {url}", status=500)
 
     monkeypatch.setattr(http, "request_json", fake)
     with pytest.raises(RequestError):
@@ -85,7 +85,7 @@ def test_fg_json_other_errors_propagate(monkeypatch):
 
 def test_fg_json_post_403_raises_fangraphs_error(monkeypatch):
     def fake(url: str, params: Any = None, **kw: Any) -> Any:
-        raise RequestError(f"HTTP 403 for {url}: Forbidden")
+        raise RequestError(f"HTTP 403 for {url}: Forbidden", status=403)
 
     monkeypatch.setattr(http, "request_json", fake)
     with pytest.raises(FangraphsError, match="okhttp"):
@@ -94,7 +94,7 @@ def test_fg_json_post_403_raises_fangraphs_error(monkeypatch):
 
 def test_fg_json_post_other_errors_propagate(monkeypatch):
     def fake(url: str, params: Any = None, **kw: Any) -> Any:
-        raise RequestError(f"HTTP 500 for {url}")
+        raise RequestError(f"HTTP 500 for {url}", status=500)
 
     monkeypatch.setattr(http, "request_json", fake)
     with pytest.raises(RequestError):
@@ -108,7 +108,7 @@ def test_fg_html_success_decodes_response(monkeypatch):
 
 def test_fg_html_403_raises_fangraphs_error(monkeypatch):
     def fake(url: str, params: Any = None, **kw: Any) -> bytes:
-        raise RequestError(f"HTTP 403 for {url}: Forbidden")
+        raise RequestError(f"HTTP 403 for {url}: Forbidden", status=403)
 
     monkeypatch.setattr(http, "request_bytes", fake)
     with pytest.raises(FangraphsError, match="okhttp"):
@@ -117,7 +117,7 @@ def test_fg_html_403_raises_fangraphs_error(monkeypatch):
 
 def test_fg_html_other_errors_propagate(monkeypatch):
     def fake(url: str, params: Any = None, **kw: Any) -> bytes:
-        raise RequestError(f"HTTP 500 for {url}")
+        raise RequestError(f"HTTP 500 for {url}", status=500)
 
     monkeypatch.setattr(http, "request_bytes", fake)
     with pytest.raises(RequestError):
@@ -126,7 +126,7 @@ def test_fg_html_other_errors_propagate(monkeypatch):
 
 def test_fg_page_data_403_raises_fangraphs_error(monkeypatch):
     def fake(url: str, params: Any = None, **kw: Any) -> bytes:
-        raise RequestError(f"HTTP 403 for {url}: Forbidden")
+        raise RequestError(f"HTTP 403 for {url}: Forbidden", status=403)
 
     monkeypatch.setattr(http, "request_bytes", fake)
     with pytest.raises(FangraphsError, match="okhttp"):
@@ -135,7 +135,7 @@ def test_fg_page_data_403_raises_fangraphs_error(monkeypatch):
 
 def test_fg_page_data_other_errors_propagate(monkeypatch):
     def fake(url: str, params: Any = None, **kw: Any) -> bytes:
-        raise RequestError(f"HTTP 500 for {url}")
+        raise RequestError(f"HTTP 500 for {url}", status=500)
 
     monkeypatch.setattr(http, "request_bytes", fake)
     with pytest.raises(RequestError):

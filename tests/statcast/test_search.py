@@ -90,6 +90,21 @@ def test_search_6_day_span_chunks_into_7_daily_requests(monkeypatch):
     assert len(rows) == 7
 
 
+def test_search_chunks_follow_default_chunk_days(monkeypatch):
+    calls = _record(monkeypatch)
+    monkeypatch.setattr(search, "DEFAULT_CHUNK_DAYS", 3)
+    rows = search.search_pitches("2024-06-01", "2024-06-07", delay=0.0)
+    ranges = sorted(
+        (c["params"]["game_date_gt"], c["params"]["game_date_lt"]) for c in calls
+    )
+    assert ranges == [
+        ("2024-06-01", "2024-06-03"),
+        ("2024-06-04", "2024-06-06"),
+        ("2024-06-07", "2024-06-07"),
+    ]
+    assert len(rows) == 3
+
+
 def test_search_start_after_end_raises(monkeypatch):
     _record(monkeypatch)
     with pytest.raises(SavantError, match="after end_date"):
