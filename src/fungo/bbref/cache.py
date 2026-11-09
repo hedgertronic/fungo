@@ -35,11 +35,12 @@ Example::
 from __future__ import annotations
 
 import hashlib
-import os
 import time
 import urllib.parse
 from pathlib import Path
 from typing import Any
+
+from fungo._cache import atomic_write, cache_root
 
 #####################################################################
 # Cache state
@@ -55,19 +56,15 @@ _CACHE_DIR: Path | None = None
 
 
 def _default_cache_dir() -> Path:
-    """Return the default cache directory, following lookup.py's convention.
+    """Return the default cache directory, ``fungo/bbref_cache/`` under the root.
 
-    Resolves ``$XDG_CACHE_HOME`` when set, otherwise ``~/.cache``, then
-    appends ``fungo/bbref_cache/``.
+    Resolves :func:`fungo._cache.cache_root` (``$XDG_CACHE_HOME`` when set,
+    otherwise ``~/.cache``) at call time.
 
     Returns:
         The resolved default path (caller creates it on demand).
     """
-    return (
-        Path(os.environ.get("XDG_CACHE_HOME") or "~/.cache").expanduser()
-        / "fungo"
-        / "bbref_cache"
-    )
+    return cache_root() / "bbref_cache"
 
 
 #####################################################################
@@ -207,4 +204,4 @@ def cache_put(url: str, params: dict[str, Any] | None, data: bytes) -> None:
     if not _CACHE_ENABLED or cache_dir is None:
         return
     key = _cache_key(url, params)
-    (cache_dir / key).write_bytes(data)
+    atomic_write(cache_dir / key, data)

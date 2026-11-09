@@ -5,7 +5,7 @@ https://github.com/chadwickbureau/register (split into 16 shards by the last hex
 char of ``key_person``).
 
 The ~6 MB register is fetched on demand via :func:`fungo.http.request_bytes`
-and cached under the stdlib user cache dir
+and cached under the user cache dir
 (``$XDG_CACHE_HOME``/``~/.cache`` -> ``fungo/chadwick_people.csv``). Call
 :func:`refresh` or pass ``force_refresh=True`` to update it.
 
@@ -17,13 +17,13 @@ MLB Stats API's xrefIds (:func:`xref_ids`) when the register has no value.
 from __future__ import annotations
 
 import csv
-import os
 import time
 import warnings
 from pathlib import Path
 from typing import Any
 
 from fungo import http
+from fungo._cache import atomic_write, cache_root
 from fungo.exceptions import StaleCacheWarning
 
 CHADWICK_SHARD_URL = "https://raw.githubusercontent.com/chadwickbureau/register/master/data/people-{}.csv"
@@ -31,7 +31,7 @@ CHADWICK_SHARDS = "0123456789abcdef"
 
 STATSAPI_PERSON_URL = "https://statsapi.mlb.com/api/v1/people/{}"
 
-CACHE_DIR = Path(os.environ.get("XDG_CACHE_HOME") or "~/.cache").expanduser() / "fungo"
+CACHE_DIR = cache_root()
 CACHE_FILE = CACHE_DIR / "chadwick_people.csv"
 
 # The register updates monthly in-season; a cache older than one update cycle
@@ -78,7 +78,7 @@ def refresh() -> Path:
     global _ROWS
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     text = _fetch_all_shards()
-    CACHE_FILE.write_text(text, encoding="utf-8")
+    atomic_write(CACHE_FILE, text.encode("utf-8"))
     _ROWS = None
     return CACHE_FILE
 

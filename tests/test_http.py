@@ -6,6 +6,7 @@ import sys
 import threading
 import urllib.error
 import urllib.request
+from types import SimpleNamespace
 
 import pytest
 
@@ -172,6 +173,23 @@ def test_request_bytes_respects_custom_retries(monkeypatch):
     assert calls["n"] == 5
 
 
+@pytest.mark.parametrize("error", [_http_error(503), urllib.error.URLError("offline")])
+@pytest.mark.parametrize("attempts", [1, 3])
+def test_request_bytes_only_backs_off_before_another_attempt(
+    monkeypatch, error, attempts
+):
+    sleeps = []
+    monkeypatch.setattr(http.time, "sleep", sleeps.append)
+
+    def fail(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(urllib.request, "urlopen", fail)
+    with pytest.raises(RequestError):
+        request_bytes("https://example.com/x", retries=attempts)
+    assert sleeps == [2**attempt for attempt in range(attempts - 1)]
+
+
 #####################################################################
 # parse_csv
 #####################################################################
@@ -323,3 +341,54 @@ def test_map_concurrent_worker_exception_propagates():
 
     with pytest.raises(RuntimeError, match="worker failed"):
         map_concurrent(boom, [1, 2, 3], max_workers=2)
+
+
+def test_map_concurrent_invalid_executor_does_not_start_progress(monkeypatch):
+    events = []
+    monkeypatch.setitem(
+        sys.modules,
+        "rich.progress",
+        SimpleNamespace(Progress=lambda: events.append("created")),
+    )
+    with pytest.raises(ValueError, match="max_workers"):
+        map_concurrent(lambda x: x, [1], max_workers=0, progress=True)
+    assert events == []
+
+
+@pytest.mark.parametrize("failure", ["start", "add_task"])
+def test_map_concurrent_progress_setup_failure_cleans_resources(monkeypatch, failure):
+    import concurrent.futures
+
+    events = []
+
+    class Progress:
+        def start(self):
+            events.append("start")
+            if failure == "start":
+                raise RuntimeError("progress setup failed")
+
+        def add_task(self, *args, **kwargs):
+            raise RuntimeError("progress setup failed")
+
+        def stop(self):
+            events.append("stop")
+
+    class Executor:
+        def __init__(self, **kwargs):
+            events.append("executor")
+
+        def shutdown(self, **kwargs):
+            events.append(("shutdown", kwargs))
+
+    monkeypatch.setitem(
+        sys.modules, "rich.progress", SimpleNamespace(Progress=Progress)
+    )
+    monkeypatch.setattr(concurrent.futures, "ThreadPoolExecutor", Executor)
+    with pytest.raises(RuntimeError, match="progress setup failed"):
+        map_concurrent(lambda x: x, [1], progress=True)
+    assert events == [
+        "executor",
+        "start",
+        ("shutdown", {"wait": False, "cancel_futures": True}),
+        "stop",
+    ]
